@@ -1,0 +1,48 @@
+{
+  "name": "agent-eval-harness",
+  "version": "0.1.0",
+  "description": "A small, dependency-free harness for evaluating LLM conversational agents with rule checks, an optional LLM judge and critical-case gating.",
+  "type": "module",
+  "private": true,
+  "main": "src/index.js",
+  "exports": "./src/index.js",
+  "bin": {
+    "agent-eval": "bin/eval.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "examples",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test",
+    "eval": "node bin/eval.js -s examples/sticker-shop/scenarios.json -a examples/sticker-shop/agent.js",
+    "eval:regression": "node bin/eval.js -s examples/sticker-shop/scenarios.json -a examples/sticker-shop/regressed-agent.js",
+    "lint": "node scripts/lint.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "keywords": [
+    "llm",
+    "agents",
+    "ai-agents",
+    "evaluation",
+    "evals",
+    "llm-as-judge",
+    "testing",
+    "regression-testing"
+  ],
+  "author": "Alfredo Rosadilla",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Binarysite/agent-eval-harness.git"
+  },
+  "homepage": "https://github.com/Binarysite/agent-eval-harness#readme",
+  "bugs": {
+    "url": "https://github.com/Binarysite/agent-eval-harness/issues"
+  }
+}

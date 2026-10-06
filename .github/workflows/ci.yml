@@ -1,0 +1,37 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: npm run lint
+      - run: npm audit
+      - run: npm test
+      - run: npm run eval
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: eval-report-node${{ matrix.node }}
+          path: reports/eval-report.json
+      # The regressed agent must trip the gate (exit 1); exit 2 would mean the run itself broke.
+      - run: npm run eval:regression || test $? -eq 1

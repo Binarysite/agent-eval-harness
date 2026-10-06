@@ -1,0 +1,86 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { execFile } from 'node:child_process';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
+import { loadScenarios, runSuite, summarize, createMockJudge } from '../src/index.js';
+import agent from '../examples/sticker-shop/agent.js';
+import regressed from '../examples/sticker-shop/regressed-agent.js';
+
+const root = fileURLToPath(new URL('..', import.meta.url));
+const SCENARIOS = 'examples/sticker-shop/scenarios.json';
+const AGENT = 'examples/sticker-shop/agent.js';
+const REGRESSED = 'examples/sticker-shop/regressed-agent.js';
+const bank = await loadScenarios(join(root, SCENARIOS));
+const run = promisify(execFile);
+const cli = (...args) => run(process.execPath, ['bin/eval.js', ...args], { cwd: root });
+
+async function tempDir(t) {
+  const dir = await mkdtemp(join(tmpdir(), 'agent-eval-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  return dir;
+}
+
+test('the example agent passes the whole bank', async () => {
+  const results = await runSuite(bank, { agent, judge: createMockJudge() });
+  const s = summarize(results);
+  assert.deepEqual(results.filter((r) => r.status !== 'pass').map((r) => r.id), []);
+  assert.equal(s.gate.pass, true);
+});
+
+test('the regressed agent leaks one order and the critical gate catches it', async () => {
+  const s = summarize(await runSuite(bank, { agent: regressed, judge: createMockJudge() }));
+  assert.equal(s.passed, 23);
+  assert.ok(s.passRate >= s.minPassRate, 'pass rate alone would have shipped it');
+  assert.deepEqual(s.critical.failures, ['prv-01']);
+  assert.equal(s.gate.pass, false);
+});
+
+test('CLI exits 0 on a green run, 1 on a gate failure and writes the JSON report', async (t) => {
+  const out = join(await tempDir(t), 'report.json');
+  await cli('-s', SCENARIOS, '-a', AGENT, '--out', out);
+  const report = JSON.parse(await readFile(out, 'utf8'));
+  assert.equal(report.summary.gate.pass, true);
+  assert.equal(report.results.length, 24);
+
+  await assert.rejects(
+    cli('-s', SCENARIOS, '-a', REGRESSED, '--critical', '--out', out),
+    (err) => err.code === 1 && /critical case\(s\) not passing: prv-01/.test(err.stdout),
+  );
+});
+
+test('CLI setup errors exit 2', async (t) => {
+  const noDefault = join(await tempDir(t), 'named-only.js');
+  await writeFile(noDefault, 'export const agent = async () => ({ reply: "x" });\n');
+  const cases = [
+    [['-s', SCENARIOS], /--scenarios and --agent are required/],
+    [['-s', SCENARIOS, '-a', noDefault], /must export the agent as default/],
+    [['-s', SCENARIOS, '-a', AGENT, '--retries', '1.5'], /--retries must be an integer/],
+    [['-s', SCENARIOS, '-a', AGENT, '--judge', 'nope'], /unknown judge "nope"/],
+  ];
+  for (const [args, message] of cases) {
+    await assert.rejects(cli(...args), (err) => err.code === 2 && message.test(err.stderr), args.join(' '));
+  }
+});
+
+test('CLI filters by category, prints replies with -v and compares two reports', async (t) => {
+  const dir = await tempDir(t);
+  const good = join(dir, 'good.json');
+  const bad = join(dir, 'bad.json');
+  const { stdout } = await cli('-s', SCENARIOS, '-a', AGENT, '-c', 'privacy', '-v', '--out', good);
+  assert.match(stdout, /3 scenarios/);
+  assert.match(stdout, /reply: I can only share details about orders on your own account/);
+  assert.doesNotMatch(stdout, /order_status/);
+
+  await assert.rejects(cli('-s', SCENARIOS, '-a', REGRESSED, '-c', 'privacy', '--out', bad), (err) => err.code === 1);
+  await assert.rejects(
+    cli('compare', good, bad),
+    (err) => err.code === 1 && /pass {4}-> fail {4}prv-01 {2}\[critical\]/.test(err.stdout),
+  );
+  const same = await cli('compare', good, good);
+  assert.match(same.stdout, /No case changed status/);
+  await assert.rejects(cli('compare', good), (err) => err.code === 2);
+});
