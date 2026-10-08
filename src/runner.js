@@ -42,6 +42,8 @@ import { checkExpectations } from './expectations.js';
  * @property {{ pass: boolean | null, reason: string, graded: boolean, attempts: number } | null} verdict
  *   `graded: false` when no judge read the rubric (mock judge, or no judge at all)
  * @property {string} [error]
+ * @property {{ run: number, passed: number }} [trials]  set by runSuite
+ * @property {boolean} [flaky]  set by runSuite: the trials did not all end the same way
  */
 
 /**
@@ -49,6 +51,7 @@ import { checkExpectations } from './expectations.js';
  * @property {Agent} agent
  * @property {Judge} [judge]
  * @property {number} [concurrency]  cases in flight at once (default 4)
+ * @property {number} [trials]       times each case runs (default 1); see combineTrials
  * @property {number} [retries]      retries per call on infrastructure failures (default 1)
  * @property {number} [timeoutMs]    per call timeout for agent and judge (default 10000)
  * @property {number} [retryDelayMs] base of the exponential backoff between retries (default 500)
@@ -225,15 +228,39 @@ export async function runCase(
 }
 
 /**
- * Run a scenario bank with bounded concurrency.
+ * Fold the trials of one case into one result. A case is flaky when its trials
+ * did not all end with the same status. A critical case passes only if every
+ * trial passed; any other case needs a strict majority. The output, checks and
+ * verdict shown are those of the first trial that agrees with the outcome.
+ * @param {CaseResult[]} runs
+ * @returns {CaseResult}
+ */
+export function combineTrials(runs) {
+  const passed = runs.filter((r) => r.status === 'pass').length;
+  const needed = runs[0].critical ? runs.length : Math.floor(runs.length / 2) + 1;
+  const pass = passed >= needed;
+  const shown = runs.find((r) => (r.status === 'pass') === pass);
+  return {
+    ...shown,
+    durationMs: runs.reduce((sum, r) => sum + r.durationMs, 0),
+    trials: { run: runs.length, passed },
+    flaky: new Set(runs.map((r) => r.status)).size > 1,
+  };
+}
+
+/**
+ * Run a scenario bank with bounded concurrency, each case `trials` times in a row.
  * @param {Scenario[]} scenarios
  * @param {RunOptions} opts
  * @returns {Promise<CaseResult[]>}
  */
-export async function runSuite(scenarios, { concurrency = 4, onResult, ...opts }) {
+export async function runSuite(scenarios, { concurrency = 4, trials = 1, onResult, ...opts }) {
   if (typeof opts.agent !== 'function') throw new TypeError('runSuite needs an agent function');
+  if (!Number.isInteger(trials) || trials < 1) throw new RangeError('trials must be a positive integer');
   return mapLimit(scenarios, concurrency, async (scenario) => {
-    const result = await runCase(scenario, opts);
+    const runs = [];
+    for (let i = 0; i < trials; i += 1) runs.push(await runCase(scenario, opts));
+    const result = combineTrials(runs);
     onResult?.(result);
     return result;
   });

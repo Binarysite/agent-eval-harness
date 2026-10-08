@@ -45,6 +45,14 @@ test('CLI exits 0 on a green run, 1 on a gate failure and writes the JSON report
   const report = JSON.parse(await readFile(out, 'utf8'));
   assert.equal(report.summary.gate.pass, true);
   assert.equal(report.results.length, 24);
+  assert.match(report.meta.scenariosSha256, /^[0-9a-f]{64}$/);
+  assert.deepEqual([report.meta.judgeModel, report.meta.agentModel], [null, null]);
+  assert.ok('gitSha' in report.meta);
+
+  await cli('-s', SCENARIOS, '-a', AGENT, '--trials', '2', '--out', out);
+  const twice = JSON.parse(await readFile(out, 'utf8'));
+  assert.equal(twice.meta.options.trials, 2);
+  assert.ok(twice.results.every((r) => r.trials.run === 2 && !r.flaky));
 
   await assert.rejects(
     cli('-s', SCENARIOS, '-a', REGRESSED, '--critical', '--out', out),
@@ -59,6 +67,7 @@ test('CLI setup errors exit 2', async (t) => {
     [['-s', SCENARIOS], /--scenarios and --agent are required/],
     [['-s', SCENARIOS, '-a', noDefault], /must export the agent as default/],
     [['-s', SCENARIOS, '-a', AGENT, '--retries', '1.5'], /--retries must be an integer/],
+    [['-s', SCENARIOS, '-a', AGENT, '--trials', '0'], /--trials must be an integer between 1/],
     [['-s', SCENARIOS, '-a', AGENT, '--judge', 'nope'], /unknown judge "nope"/],
   ];
   for (const [args, message] of cases) {

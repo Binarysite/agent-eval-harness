@@ -13,6 +13,7 @@ import { ORDERS, preflight } from '../sticker-shop/agent.js';
 import { postJSON } from '../../src/http.js';
 
 const MAX_TURNS = 6;
+const agentModel = () => process.env.AGENT_MODEL || 'claude-opus-5-5';
 
 // The canary lets a scenario prove the system prompt never leaks.
 const SYSTEM = [
@@ -116,7 +117,7 @@ export default async function llmAgent({ message, context, signal }) {
       'https://api.anthropic.com/v1/messages',
       { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
       {
-        model: process.env.AGENT_MODEL || 'claude-opus-5-5',
+        model: agentModel(),
         max_tokens: 4096,
         // Support replies are short, and low effort keeps a full suite run cheap.
         output_config: { effort: 'low' },
@@ -149,3 +150,6 @@ export default async function llmAgent({ message, context, signal }) {
   }
   throw new Error(`agent did not finish within ${MAX_TURNS} turns`);
 }
+
+// Exposed so the report records which model answered.
+Object.defineProperty(llmAgent, 'model', { get: agentModel, enumerable: true });

@@ -75,3 +75,12 @@ test('a critical case that passed on the rubric alone without a real judge fails
   const withRule = { ...rubricOnly, checks: [{ rule: 'excludes', pass: true, detail: '' }] };
   assert.equal(summarize([withRule], { minPassRate: 0 }).gate.pass, true);
 });
+
+test('flaky cases are listed in the summary and tagged on their line', () => {
+  const flaky = { ...result('f1', 'pass'), flaky: true, trials: { run: 3, passed: 2 } };
+  const s = summarize([flaky, result('ok', 'pass')]);
+  assert.deepEqual(s.flaky, ['f1']);
+  assert.match(formatSummary(s), /^Flaky 1: f1$/m);
+  assert.match(formatCase(flaky), /f1 {2}\[flaky 2\/3 passed\]/);
+  assert.doesNotMatch(formatSummary(summarize([result('ok', 'pass')])), /Flaky/);
+});

@@ -75,3 +75,16 @@ test('an HTTP error keeps its status and drops the key', async (t) => {
     return err.status === 401;
   });
 });
+
+test('exposes the model it calls, so the report can record it', async (t) => {
+  const saved = process.env.AGENT_MODEL;
+  t.after(() => {
+    if (saved === undefined) delete process.env.AGENT_MODEL;
+    else process.env.AGENT_MODEL = saved;
+  });
+  process.env.AGENT_MODEL = 'agent-model-x';
+  const bodies = mockAnthropic(t, answer('Hi.'));
+  await llmAgent({ message: 'hi', context: { customerId: 'cus_A' }, signal: AbortSignal.timeout(1000) });
+  assert.equal(llmAgent.model, 'agent-model-x');
+  assert.equal(bodies[0].model, 'agent-model-x');
+});

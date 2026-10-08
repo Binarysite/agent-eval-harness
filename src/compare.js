@@ -1,4 +1,5 @@
 import { pct } from './report.js';
+import { PROVENANCE_KEYS } from './provenance.js';
 
 /**
  * Compare two JSON reports case by case. A raw diff of the files is noisy
@@ -32,10 +33,15 @@ export function compareReports(before, after, { beforeLabel = 'before', afterLab
     const critical = Boolean((afterById.get(id) ?? beforeById.get(id)).critical);
     if (from !== to) changes.push({ id, critical, from, to });
   }
+  // A status change between two different setups may come from the setup, not the agent.
+  const meta = (report, key) => report.meta?.[key] ?? null;
+  const warnings = PROVENANCE_KEYS.filter((key) => meta(before, key) !== meta(after, key))
+    .map((key) => `${key} differs between the runs: ${meta(before, key)} -> ${meta(after, key)}`);
   return {
     changes,
     regressions: changes.filter((change) => change.from === 'pass'),
     passRate: { before: before.summary.passRate, after: after.summary.passRate },
+    warnings,
   };
 }
 
@@ -48,5 +54,6 @@ export function formatComparison(comparison) {
   if (!lines.length) lines.push('No case changed status.');
   const { before, after } = comparison.passRate;
   lines.push('', `Pass rate ${pct(before)} -> ${pct(after)}  regressions ${comparison.regressions.length}`);
+  for (const w of comparison.warnings ?? []) lines.push(`WARNING: ${w}`);
   return lines.join('\n');
 }

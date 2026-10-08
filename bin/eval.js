@@ -16,12 +16,14 @@ import {
   createOpenAICompatibleJudge,
   compareReports,
   formatComparison,
+  runProvenance,
 } from '../src/index.js';
 
 const DEFAULTS = {
   judge: 'mock',
   concurrency: '4',
   retries: '1',
+  trials: '1',
   timeout: '10000',
   minPassRate: '0.9',
   handoffTool: 'handoff_to_human',
@@ -38,6 +40,8 @@ const HELP = `Usage: agent-eval -s <scenarios.json> -a <agent.js> [options]
       --critical            only critical cases
       --concurrency <n>     cases in flight at once (default ${DEFAULTS.concurrency})
       --retries <n>         retries on network errors, timeouts, 429 and 5xx (default ${DEFAULTS.retries})
+      --trials <k>          run each case k times; mixed results mark it flaky and a
+                            critical case must pass k/k (default ${DEFAULTS.trials})
       --timeout <ms>        per call timeout for agent and judge (default ${DEFAULTS.timeout})
       --min-pass-rate <x>   overall pass rate required, 0..1 (default ${DEFAULTS.minPassRate})
       --handoff-tool <name> tool the "handoff" rule looks for (default ${DEFAULTS.handoffTool})
@@ -88,6 +92,7 @@ async function main() {
       critical: { type: 'boolean', default: false },
       concurrency: { type: 'string', default: DEFAULTS.concurrency },
       retries: { type: 'string', default: DEFAULTS.retries },
+      trials: { type: 'string', default: DEFAULTS.trials },
       timeout: { type: 'string', default: DEFAULTS.timeout },
       'min-pass-rate': { type: 'string', default: DEFAULTS.minPassRate },
       'handoff-tool': { type: 'string', default: DEFAULTS.handoffTool },
@@ -110,6 +115,7 @@ async function main() {
   const opts = {
     concurrency: toNumber('concurrency', args.concurrency, { min: 1, integer: true }),
     retries: toNumber('retries', args.retries, { integer: true }),
+    trials: toNumber('trials', args.trials, { min: 1, integer: true }),
     timeoutMs: toNumber('timeout', args.timeout, { min: 1, max: 2_147_483_647 }),
     handoffTool: args['handoff-tool'],
   };
@@ -125,7 +131,7 @@ async function main() {
 
   console.log(
     `agent-eval-harness  ${scenarios.length} scenarios  agent ${args.agent}  judge ${args.judge}`
-      + `  concurrency ${opts.concurrency}\n`,
+      + `  concurrency ${opts.concurrency}${opts.trials > 1 ? `  trials ${opts.trials}` : ''}\n`,
   );
   const started = Date.now();
   const results = await runSuite(scenarios, { agent, judge, ...opts });
@@ -138,6 +144,7 @@ async function main() {
     agent: args.agent,
     scenarios: args.scenarios,
     judge: args.judge,
+    ...(await runProvenance({ agent, judge, scenariosFile: args.scenarios })),
     filters: { categories, criticalOnly: args.critical },
     options: opts,
     durationMs: Date.now() - started,

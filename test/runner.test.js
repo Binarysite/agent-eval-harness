@@ -252,3 +252,22 @@ test('verdicts say whether a judge read the rubric', async () => {
   assert.deepEqual(none.verdict, { pass: null, reason: 'rubric not graded: no judge', graded: false, attempts: 0 });
   assert.equal((await runCase(scenario(), { agent: okAgent })).verdict, null, 'no rubric, nothing to grade');
 });
+
+test('trials: mixed results mark a case flaky, and a critical case needs every trial', async () => {
+  const alternating = () => {
+    let calls = 0;
+    return async () => { calls += 1; return { reply: 'x', toolCalls: calls === 2 ? ['t'] : [] }; };
+  };
+  const [loose] = await runSuite([scenario()], { agent: alternating(), trials: 3 });
+  assert.equal(loose.status, 'pass', '2 of 3 is a majority for a non-critical case');
+  assert.deepEqual([loose.flaky, loose.trials], [true, { run: 3, passed: 2 }]);
+
+  const [strict] = await runSuite([scenario({ critical: true })], { agent: alternating(), trials: 3 });
+  assert.equal(strict.status, 'fail', 'a critical case must pass 3 of 3');
+  assert.equal(strict.flaky, true);
+  assert.match(strict.checks.find((c) => !c.pass).detail, /expected no tool calls/, 'shows the failing trial');
+
+  const [steady] = await runSuite([scenario()], { agent: okAgent });
+  assert.deepEqual([steady.flaky, steady.trials], [false, { run: 1, passed: 1 }]);
+  await assert.rejects(runSuite([scenario()], { agent: okAgent, trials: 0 }), /trials must be a positive integer/);
+});

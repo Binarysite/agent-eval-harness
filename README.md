@@ -49,6 +49,7 @@ multi-tenant customer-service agent, now in a live trial
 (294 scenarios, 65 of them critical).
 Those scenarios, prompts and data are not published; everything here, including
 the sticker shop, is invented for the example.
+Built with Claude Code; the design decisions and reviews are mine.
 
 ## The problem
 
@@ -103,7 +104,13 @@ Pass rate 100.0% -> 95.8%  regressions 1
 ```
 
 CI uploads each run's report as an artifact, so the `main` report is there to
-compare against.
+compare against. Each report's `meta` records `judgeModel`, `agentModel` (when the
+agent function has a `model` property, else `null`), the bank's `scenariosSha256`
+and the `gitSha`, and `compare` warns when any of them differ.
+
+`--trials k` (`trials` in the API, default 1) runs each case k times. Mixed
+results mark the case flaky in the summary; a critical case must pass k of k,
+any other case a majority.
 
 ## Writing scenarios
 
@@ -270,7 +277,7 @@ a refusal.
 | `none` | rules only |
 
 Keys are read from the environment only and never written to the report. Other
-flags: `--concurrency`, `--retries`, `--timeout`, `--min-pass-rate`,
+flags: `--concurrency`, `--retries`, `--trials`, `--timeout`, `--min-pass-rate`,
 `--handoff-tool` (the tool name the `handoff` rule looks for) and `--out`; see
 `node bin/eval.js --help`. Exit codes: 0 gate passed, 1 gate failed, 2 usage or
 setup error.
@@ -303,6 +310,7 @@ src/judges/mock.js          deterministic offline judge
 src/judges/llm.js           Anthropic and OpenAI-compatible judges over fetch
 src/http.js                 shared fetch call and key redaction for judges and example
 src/compare.js              case-by-case diff of two reports
+src/provenance.js           models, bank hash and git commit recorded in each report
 examples/sticker-shop/      rule-based agent, regressed agent, 24 scenarios
 examples/llm-agent/         Claude tool-use agent for the same scenarios
 test/                       node:test suite

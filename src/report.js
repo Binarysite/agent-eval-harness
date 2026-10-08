@@ -70,6 +70,7 @@ export function summarize(results, { minPassRate = 0.9 } = {}) {
     minPassRate,
     critical: { total: critical.length, passed: critical.length - criticalFailures.length, failures: criticalFailures },
     byCategory,
+    flaky: results.filter((r) => r.flaky).map((r) => r.id),
     gate: { pass: reasons.length === 0, reasons },
     warnings,
   };
@@ -89,7 +90,8 @@ const LABEL = { pass: 'PASS', fail: 'FAIL', error: 'ERR ' };
  * @returns {string}
  */
 export function formatCase(r, { verbose = false } = {}) {
-  const tag = r.critical ? '  [critical]' : '';
+  const flaky = r.flaky ? `  [flaky ${r.trials.passed}/${r.trials.run} passed]` : '';
+  const tag = `${r.critical ? '  [critical]' : ''}${flaky}`;
   const lines = [`${LABEL[r.status]}  ${r.category.padEnd(18)} ${r.id}${tag}`];
   const why = [];
   if (r.error) why.push(`error: ${r.error}${r.attempts > 1 ? ` (after ${r.attempts} attempts)` : ''}`);
@@ -118,6 +120,7 @@ export function formatSummary(s) {
     '',
     `${totals}  pass rate ${pct(s.passRate)} (min ${pct(s.minPassRate)})`,
     `Critical ${s.critical.total}  passed ${s.critical.passed}`,
+    ...(s.flaky?.length ? [`Flaky ${s.flaky.length}: ${s.flaky.join(', ')}`] : []),
     ...s.warnings.map((w) => `WARNING: ${w}`),
     s.gate.pass ? 'RESULT: PASS' : `RESULT: FAIL\n${s.gate.reasons.map((r) => `  - ${r}`).join('\n')}`,
   );

@@ -63,7 +63,7 @@ const truncated = () => Object.assign(
 
 /**
  * Anthropic Messages API judge.
- * Env: ANTHROPIC_API_KEY (required), JUDGE_MODEL (optional).
+ * Env: ANTHROPIC_API_KEY (required), JUDGE_MODEL (optional). The judge exposes `.model`.
  * @returns {import('../runner.js').Judge}
  */
 export function createAnthropicJudge({
@@ -71,7 +71,7 @@ export function createAnthropicJudge({
   model = process.env.JUDGE_MODEL || 'claude-sonnet-5-5',
 } = {}) {
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY is not set');
-  return async function anthropicJudge({ scenario, output, signal }) {
+  return Object.assign(async function anthropicJudge({ scenario, output, signal }) {
     const data = await postJSON(
       'https://api.anthropic.com/v1/messages',
       { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
@@ -87,7 +87,7 @@ export function createAnthropicJudge({
     if (data.stop_reason === 'max_tokens') throw truncated();
     const text = (data.content ?? []).filter((b) => b.type === 'text').map((b) => b.text).join('');
     return parseVerdict(text);
-  };
+  }, { model });
 }
 
 /**
@@ -103,7 +103,7 @@ export function createOpenAICompatibleJudge({
 } = {}) {
   if (!apiKey) throw new Error('OPENAI_API_KEY is not set');
   if (!model) throw new Error('JUDGE_MODEL is not set');
-  return async function openAICompatibleJudge({ scenario, output, signal }) {
+  return Object.assign(async function openAICompatibleJudge({ scenario, output, signal }) {
     const data = await postJSON(
       `${baseUrl.replace(/\/$/, '')}/chat/completions`,
       { authorization: `Bearer ${apiKey}` },
@@ -119,5 +119,5 @@ export function createOpenAICompatibleJudge({
     const choice = data.choices?.[0];
     if (choice?.finish_reason === 'length') throw truncated();
     return parseVerdict(choice?.message?.content ?? '');
-  };
+  }, { model });
 }

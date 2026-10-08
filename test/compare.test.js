@@ -33,3 +33,17 @@ test('a file that is not a report is rejected by name', () => {
     /main\.json is not an agent-eval report/,
   );
 });
+
+test('warns when the two runs used a different judge, agent, bank or commit', () => {
+  const meta = { judgeModel: 'j1', agentModel: null, scenariosSha256: 'aaa', gitSha: 'c1' };
+  const before = { ...report(1, ['a', 'pass']), meta };
+  const after = { ...report(1, ['a', 'pass']), meta: { ...meta, judgeModel: 'j2', scenariosSha256: 'bbb' } };
+  const c = compareReports(before, after);
+  assert.deepEqual(c.warnings, [
+    'judgeModel differs between the runs: j1 -> j2',
+    'scenariosSha256 differs between the runs: aaa -> bbb',
+  ]);
+  assert.match(formatComparison(c), /WARNING: judgeModel differs between the runs: j1 -> j2/);
+  assert.deepEqual(compareReports(before, before).warnings, []);
+  assert.deepEqual(compareReports(report(1), report(1)).warnings, [], 'reports without meta compare quietly');
+});
