@@ -198,7 +198,7 @@ function caseStatus(rulesPass, verdict) {
  */
 export async function runCase(
   scenario,
-  { agent, judge, retries = 1, timeoutMs = 10_000, retryDelayMs = 500, handoffTool } = {},
+  { agent, judge, retries = 1, timeoutMs = 10_000, retryDelayMs = 500, handoffTool } = /** @type {any} */ ({}),
 ) {
   const started = performance.now();
   const base = { id: scenario.id, category: scenario.category, critical: scenario.critical === true };

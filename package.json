@@ -5,13 +5,20 @@
   "type": "module",
   "private": true,
   "main": "src/index.js",
-  "exports": "./src/index.js",
+  "types": "index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./src/index.js"
+    }
+  },
   "bin": {
     "agent-eval": "bin/eval.js"
   },
   "files": [
     "bin",
     "src",
+    "index.d.ts",
     "examples",
     "LICENSE",
     "README.md"
@@ -20,7 +27,8 @@
     "test": "node --test",
     "eval": "node bin/eval.js -s examples/sticker-shop/scenarios.json -a examples/sticker-shop/agent.js",
     "eval:regression": "node bin/eval.js -s examples/sticker-shop/scenarios.json -a examples/sticker-shop/regressed-agent.js",
-    "lint": "node scripts/lint.mjs"
+    "lint": "node scripts/lint.mjs",
+    "typecheck": "tsc --noEmit --allowJs --checkJs"
   },
   "engines": {
     "node": ">=22"
@@ -44,5 +52,9 @@
   "homepage": "https://github.com/Binarysite/agent-eval-harness#readme",
   "bugs": {
     "url": "https://github.com/Binarysite/agent-eval-harness/issues"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "typescript": "7.0.2"
   }
 }

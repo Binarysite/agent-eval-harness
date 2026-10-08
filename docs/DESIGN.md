@@ -71,7 +71,8 @@ differ, because a status change between two setups may come from the setup.
 Keys are read from the environment only and never written to the report.
 
 **Zero runtime dependencies.** Node 22+, `node:test` for tests, `fetch` for the
-optional LLM judges.
+optional LLM judges. TypeScript is a dev dependency only: it type-checks the
+JSDoc in `src` and `bin` and the declarations in `index.d.ts`.
 
 ## Known limits
 
@@ -112,6 +113,7 @@ optional LLM judges.
 
 ```text
 bin/eval.js                 CLI
+index.d.ts                  public type declarations (checked by npm run typecheck)
 src/expectations.js         rule checks and their accepted shapes
 src/scenarios.js            loading, validation, filters
 src/runner.js               retries, timeouts, bounded concurrency, judge call
