@@ -132,7 +132,8 @@ compare against.
 `rubric` is plain language for the LLM judge. `context` is passed to the agent
 untouched (signed-in customer, role, locale). Unknown rule names fail
 validation, so a typo like `exclude` cannot silently become "no check". So does
-an empty `expect` with no rubric, which would pass without checking anything.
+an empty `expect` with no rubric, which would pass without checking anything,
+and an empty string in a list rule, which every reply contains.
 
 Each case ends as `pass`, `fail` (a rule or the judge said no) or `error` (the
 agent threw, timed out, returned a malformed result, or the judge could not
@@ -159,21 +160,30 @@ already failed.
 **Critical gating instead of weighting.** Weights invite arguments about whether
 a leak is worth 5 points or 50. A boolean is easier to reason about: some
 behaviors are release blockers, and the bank says which ones. Critical cases
-pair a rule (the literal leak) with a rubric (the paraphrased leak).
+pair a rule (the literal leak) with a rubric (the paraphrased leak). Validation
+requires the rule, and a critical case that passes on its rubric alone with the
+mock judge or no judge fails the gate, because neither reads the rubric (their
+verdicts record `graded: false`).
 
 **Retries for infrastructure, never for answers.** Agent and judge share one
-policy: a network error, a timeout, a 429 or a 5xx is retried (`--retries`,
-default 1; the result and the verdict record their `attempts`). Any other 4xx,
-such as a bad key or a bad request, is not retried because it would fail the
-same way. A wrong answer, or a "no" from the judge, is never retried: retrying
-until green hides exactly the flakiness an eval exists to show.
+policy: a network error, an abort or timeout, a 429 or a 5xx is retried
+(`--retries`, default 1; the result and the verdict record their `attempts`),
+after the server's `Retry-After` when the error carries one (`retryAfterMs`,
+filled in from the header by the bundled judges and the example agent, capped at
+60 s) or else an exponential backoff with full jitter (`retryDelayMs`, default
+500 ms, capped at 8 s).
+Anything else is not retried because it would fail the same way: any other 4xx
+(a bad key, a bad request), an error marked `retryable: false` (a refusal, a
+reply cut off at `max_tokens`) or a plain bug in the agent. A wrong answer, or
+a "no" from the judge, is never retried: retrying until green hides exactly the
+flakiness an eval exists to show.
 
 **An undecided judge is an error, not a pass.** Unparseable JSON, a refusal, a
 verdict without a boolean `pass`, or a judge that still fails after its retries
 marks the case `error`, which counts against the pass rate and blocks the run if
 the case is critical. The summary also warns when nothing in the selection is
-critical, or when a case passed with no rule and no verdict (a rubric-only case
-run with `--judge none`).
+critical, or when a case passed with no rule and no real judge (a rubric-only
+case run with `--judge mock` or `--judge none`).
 
 **Everything is injected.** The agent is `({ message, context, signal }) =>
 { reply, toolCalls }` and the judge is `({ scenario, output, signal }) =>
@@ -201,8 +211,6 @@ optional LLM judges.
   model conversations yet.
 - **Small banks give coarse rates.** With 24 cases, one case is 4.2 points.
   Look at which cases moved, not only the percentage.
-- **Retries are immediate.** There is no backoff between attempts, so a rate
-  limit that lasts longer than one retry still ends as an `error`.
 - **A timeout aborts the signal, it cannot stop your code.** An agent that
   ignores `signal` may keep running after the harness has moved on.
 
@@ -212,8 +220,12 @@ optional LLM judges.
 for the same shop, tools and orders, so it runs against the same 24 scenarios:
 
 ```bash
-ANTHROPIC_API_KEY=... npm run eval -- -a examples/llm-agent/agent.js --judge anthropic
+ANTHROPIC_API_KEY=... npm run eval -- -a examples/llm-agent/agent.js --judge anthropic --timeout 60000
 ```
+
+The default `--timeout` of 10 s suits the offline example; a tool loop or an
+LLM judge can take longer than that, and a timed-out call is retried and billed
+again.
 
 Its tool loop, the tool results it sends back and the ownership check inside
 `lookup_order` are covered offline in `test/llm-agent.test.js` against a mocked
@@ -241,12 +253,14 @@ export default async function agent({ message, context, signal }) {
 ```
 
 ```bash
-ANTHROPIC_API_KEY=... node bin/eval.js -s ./my-scenarios.json -a ./my-agent.js --judge anthropic
+ANTHROPIC_API_KEY=... node bin/eval.js -s ./my-scenarios.json -a ./my-agent.js --judge anthropic --timeout 60000
 ```
 
 `--scenarios` and `--agent` are required; the npm scripts point them at the
 example. Throw an `Error` with a numeric `status` for HTTP failures, so a 429 or
-a 5xx is retried and a 401 is not.
+a 5xx is retried and a 401 is not, add `retryAfterMs` if the server sent
+`Retry-After`, and set `retryable: false` on an error that would repeat, such as
+a refusal.
 
 | `--judge` | Environment |
 |---|---|
@@ -287,6 +301,7 @@ src/runner.js               retries, timeouts, bounded concurrency, judge call
 src/report.js               summary, critical gate, console and JSON output
 src/judges/mock.js          deterministic offline judge
 src/judges/llm.js           Anthropic and OpenAI-compatible judges over fetch
+src/http.js                 shared fetch call and key redaction for judges and example
 src/compare.js              case-by-case diff of two reports
 examples/sticker-shop/      rule-based agent, regressed agent, 24 scenarios
 examples/llm-agent/         Claude tool-use agent for the same scenarios

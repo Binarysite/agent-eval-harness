@@ -1,3 +1,5 @@
+import { postJSON } from '../http.js';
+
 /**
  * LLM judges over plain fetch (no SDK, so the package keeps zero runtime
  * dependencies). Keys come from environment variables only.
@@ -53,34 +55,11 @@ export function parseVerdict(text) {
   }
 }
 
-/**
- * Remove the key, and anything shaped like one, from text that may end up in
- * the console or the report. Some OpenAI-compatible providers echo a masked
- * key in their error body ("sk-ab***yz").
- * @param {string} text
- * @param {string[]} [secrets]
- * @returns {string}
- */
-export function redactSecrets(text, secrets = []) {
-  let out = String(text);
-  for (const secret of secrets) if (secret) out = out.split(secret).join('[redacted]');
-  return out.replace(/\bsk-[\w*-]+/g, '[redacted]');
-}
-
-async function postJSON(url, headers, body, signal, apiKey) {
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', ...headers },
-    body: JSON.stringify(body),
-    signal,
-  });
-  if (!res.ok) {
-    // `status` lets the runner retry 429 and 5xx but not a bad key or request.
-    const detail = redactSecrets(await res.text(), [apiKey]).slice(0, 200);
-    throw Object.assign(new Error(`HTTP ${res.status}: ${detail}`), { status: res.status });
-  }
-  return res.json();
-}
+/** The verdict JSON was cut off. Asking again would cut it off the same way. */
+const truncated = () => Object.assign(
+  new Error('judge reply was cut off at the token limit; raise max_tokens or shorten the rubric'),
+  { retryable: false },
+);
 
 /**
  * Anthropic Messages API judge.
@@ -102,10 +81,10 @@ export function createAnthropicJudge({
         system: JUDGE_SYSTEM,
         messages: [{ role: 'user', content: buildJudgePrompt(scenario, output) }],
       },
-      signal,
-      apiKey,
+      { signal, apiKey },
     );
     if (data.stop_reason === 'refusal') return { pass: null, reason: 'judge refused to grade' };
+    if (data.stop_reason === 'max_tokens') throw truncated();
     const text = (data.content ?? []).filter((b) => b.type === 'text').map((b) => b.text).join('');
     return parseVerdict(text);
   };
@@ -135,9 +114,10 @@ export function createOpenAICompatibleJudge({
           { role: 'user', content: buildJudgePrompt(scenario, output) },
         ],
       },
-      signal,
-      apiKey,
+      { signal, apiKey },
     );
-    return parseVerdict(data.choices?.[0]?.message?.content ?? '');
+    const choice = data.choices?.[0];
+    if (choice?.finish_reason === 'length') throw truncated();
+    return parseVerdict(choice?.message?.content ?? '');
   };
 }

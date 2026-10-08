@@ -1,3 +1,4 @@
+import { setTimeout as sleep } from 'node:timers/promises';
 import { checkExpectations } from './expectations.js';
 
 /**
@@ -9,19 +10,23 @@ import { checkExpectations } from './expectations.js';
  * The agent under test. It receives one user message and returns what it said
  * plus the tools it called. Everything else (model, prompt, tool execution) is
  * the agent's business, so the harness works with any stack.
- * Throw an Error with a numeric `status` for HTTP failures; 4xx other than 429 is not retried.
+ * Throw an Error with a numeric `status` for HTTP failures; 4xx other than 429 is
+ * not retried. Set `retryable: false` on an error that would repeat (a refusal).
  * @callback Agent
- * @param {{ message: string, context: Record<string, unknown>, scenario: Scenario, signal: AbortSignal }} input
+ * It never sees the scenario's `expect` or `rubric`: an agent that can read the
+ * answers would grade itself.
+ * @param {{ message: string, context: Record<string, unknown>, signal: AbortSignal }} input
  * @returns {Promise<{ reply: string, toolCalls?: Array<{ name: string, args?: object } | string> }>}
  */
 
 /**
  * A judge grades one output against the scenario rubric.
  * `pass: null` means the judge could not decide (bad JSON, refusal, outage).
+ * `graded: false` means it did not read the rubric (the mock judge); omitted means it did.
  * Throw an Error with a numeric `status` for HTTP failures; 4xx other than 429 is not retried.
  * @callback Judge
  * @param {{ scenario: Scenario, output: AgentOutput, signal: AbortSignal }} input
- * @returns {Promise<{ pass: boolean | null, reason: string }>}
+ * @returns {Promise<{ pass: boolean | null, reason: string, graded?: boolean }>}
  */
 
 /**
@@ -34,7 +39,8 @@ import { checkExpectations } from './expectations.js';
  * @property {number} durationMs
  * @property {AgentOutput | null} output
  * @property {import('./expectations.js').CheckResult[]} checks
- * @property {{ pass: boolean | null, reason: string, attempts: number } | null} verdict
+ * @property {{ pass: boolean | null, reason: string, graded: boolean, attempts: number } | null} verdict
+ *   `graded: false` when no judge read the rubric (mock judge, or no judge at all)
  * @property {string} [error]
  */
 
@@ -45,6 +51,7 @@ import { checkExpectations } from './expectations.js';
  * @property {number} [concurrency]  cases in flight at once (default 4)
  * @property {number} [retries]      retries per call on infrastructure failures (default 1)
  * @property {number} [timeoutMs]    per call timeout for agent and judge (default 10000)
+ * @property {number} [retryDelayMs] base of the exponential backoff between retries (default 500)
  * @property {string} [handoffTool]  tool name the `handoff` rule looks for
  * @property {(r: CaseResult) => void} [onResult]
  */
@@ -56,7 +63,7 @@ export async function withTimeout(fn, ms, label = 'call') {
   const timeout = new Promise((_, reject) => {
     timer = setTimeout(() => {
       controller.abort();
-      reject(new Error(`${label} timed out after ${ms} ms`));
+      reject(Object.assign(new Error(`${label} timed out after ${ms} ms`), { name: 'TimeoutError' }));
     }, ms);
   });
   try {
@@ -95,17 +102,44 @@ export function normalizeOutput(raw) {
   return { reply: raw.reply, toolCalls };
 }
 
+const NETWORK_CODES = new Set([
+  'ECONNRESET', 'ECONNREFUSED', 'ECONNABORTED', 'ETIMEDOUT', 'ENOTFOUND', 'EAI_AGAIN', 'EPIPE', 'ENETUNREACH',
+  'UND_ERR_SOCKET', 'UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_HEADERS_TIMEOUT', 'UND_ERR_BODY_TIMEOUT',
+]);
+
 /**
- * A failure is worth retrying when it is the network, a timeout, a 429 or a
- * 5xx. A 4xx such as a bad key or a bad request will fail the same way.
+ * A failure is worth retrying when it is infrastructure: the network, an abort
+ * or timeout, a 429 or a 5xx. Anything else (a 4xx, a refusal, max_tokens, a
+ * bug in the agent) would fail the same way again, so it is reported at once.
  */
 export function isTransient(err) {
+  if (err?.retryable === false) return false;
   const status = err?.status;
-  return typeof status !== 'number' || status === 429 || status >= 500;
+  if (typeof status === 'number') return status === 429 || status >= 500;
+  if (err?.name === 'AbortError' || err?.name === 'TimeoutError') return true;
+  // fetch reports network failures as `TypeError: fetch failed` with the code on `cause`.
+  return NETWORK_CODES.has(err?.code) || NETWORK_CODES.has(err?.cause?.code)
+    || (err instanceof TypeError && err.message === 'fetch failed');
+}
+
+const MAX_BACKOFF_MS = 8_000;
+// A longer Retry-After would stall the whole run; past this the retry is
+// attempted anyway and reported if it fails again.
+const MAX_RETRY_AFTER_MS = 60_000;
+
+/**
+ * How long to wait before retry number `attempt`: the server's Retry-After
+ * when the error carries one (`retryAfterMs`), otherwise exponential backoff
+ * with full jitter, so parallel cases that hit the same 429 do not retry in
+ * lockstep.
+ */
+export function retryDelay(err, attempt, baseMs = 500) {
+  if (Number.isFinite(err?.retryAfterMs)) return Math.min(Math.max(0, err.retryAfterMs), MAX_RETRY_AFTER_MS);
+  return Math.random() * Math.min(MAX_BACKOFF_MS, baseMs * 2 ** (attempt - 1));
 }
 
 /** Call `fn` with a timeout, retrying transient failures up to `retries` times. */
-async function withRetries(fn, { retries, timeoutMs, label }) {
+async function withRetries(fn, { retries, timeoutMs, retryDelayMs, label }) {
   let attempts = 0;
   for (;;) {
     attempts += 1;
@@ -113,6 +147,7 @@ async function withRetries(fn, { retries, timeoutMs, label }) {
       return { value: await withTimeout(fn, timeoutMs, label), attempts };
     } catch (error) {
       if (attempts > retries || !isTransient(error)) return { error, attempts };
+      await sleep(retryDelay(error, attempts, retryDelayMs));
     }
   }
 }
@@ -122,9 +157,12 @@ const INVALID_VERDICT = 'judge returned an invalid verdict, expected { pass: boo
 /** A verdict that is not `{ pass: boolean | null }` becomes undecided, never a pass. */
 function normalizeVerdict(raw) {
   const valid = raw !== null && typeof raw === 'object' && (typeof raw.pass === 'boolean' || raw.pass === null);
-  if (!valid) return { pass: null, reason: INVALID_VERDICT };
-  return { ...raw, reason: String(raw.reason ?? '') };
+  if (!valid) return { pass: null, reason: INVALID_VERDICT, graded: false };
+  return { ...raw, reason: String(raw.reason ?? ''), graded: raw.graded !== false };
 }
+
+/** Recorded when a case has a rubric but the run has no judge. It never decides the status. */
+const NOT_GRADED = Object.freeze({ pass: null, reason: 'rubric not graded: no judge', graded: false, attempts: 0 });
 
 /** Ask the judge for a verdict; a judge that keeps failing becomes undecided. */
 async function judgeCase(judge, scenario, output, opts) {
@@ -132,7 +170,9 @@ async function judgeCase(judge, scenario, output, opts) {
     (signal) => judge({ scenario, output, signal }),
     { ...opts, label: 'judge' },
   );
-  const verdict = error ? { pass: null, reason: `judge error: ${error.message}` } : normalizeVerdict(value);
+  const verdict = error
+    ? { pass: null, reason: `judge error: ${error.message}`, graded: false }
+    : normalizeVerdict(value);
   return { ...verdict, attempts };
 }
 
@@ -144,7 +184,7 @@ function caseStatus(rulesPass, verdict) {
 
 /**
  * Evaluate one scenario. Only infrastructure failures are retried (network,
- * timeout, 429, 5xx), with the same policy for agent and judge. A wrong answer
+ * abort, timeout, 429, 5xx), with the same policy for agent and judge. A wrong answer
  * or a "no" from the judge is never retried: retrying until green hides the
  * flakiness an eval exists to expose. The judge only runs when every rule
  * passed, so you never pay to grade a case that already failed.
@@ -152,14 +192,17 @@ function caseStatus(rulesPass, verdict) {
  * @param {Omit<RunOptions, 'concurrency' | 'onResult'>} opts
  * @returns {Promise<CaseResult>}
  */
-export async function runCase(scenario, { agent, judge, retries = 1, timeoutMs = 10_000, handoffTool } = {}) {
+export async function runCase(
+  scenario,
+  { agent, judge, retries = 1, timeoutMs = 10_000, retryDelayMs = 500, handoffTool } = {},
+) {
   const started = performance.now();
   const base = { id: scenario.id, category: scenario.category, critical: scenario.critical === true };
   const done = (fields) => ({ ...base, ...fields, durationMs: Math.round(performance.now() - started) });
 
   const { value, error, attempts } = await withRetries(
-    (signal) => agent({ message: scenario.message, context: scenario.context ?? {}, scenario, signal }),
-    { retries, timeoutMs, label: 'agent' },
+    (signal) => agent({ message: scenario.message, context: scenario.context ?? {}, signal }),
+    { retries, timeoutMs, retryDelayMs, label: 'agent' },
   );
   const failed = { attempts, output: null, checks: [], verdict: null, status: 'error' };
   if (error) return done({ ...failed, error: error.message });
@@ -174,9 +217,11 @@ export async function runCase(scenario, { agent, judge, retries = 1, timeoutMs =
   }
 
   const rulesPass = checks.every((c) => c.pass);
-  const shouldJudge = rulesPass && judge && scenario.rubric;
-  const verdict = shouldJudge ? await judgeCase(judge, scenario, output, { retries, timeoutMs }) : null;
-  return done({ attempts, output, checks, verdict, status: caseStatus(rulesPass, verdict) });
+  const finish = (verdict, status) => done({ attempts, output, checks, verdict, status });
+  if (!rulesPass || !scenario.rubric) return finish(null, caseStatus(rulesPass, null));
+  if (!judge) return finish({ ...NOT_GRADED }, 'pass');
+  const verdict = await judgeCase(judge, scenario, output, { retries, timeoutMs, retryDelayMs });
+  return finish(verdict, caseStatus(rulesPass, verdict));
 }
 
 /**

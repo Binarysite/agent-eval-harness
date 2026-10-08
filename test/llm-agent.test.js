@@ -1,6 +1,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import llmAgent from '../examples/llm-agent/agent.js';
+import { isTransient } from '../src/runner.js';
 
 /** Canned Messages API responses, in order; records every request body. */
 function mockAnthropic(t, ...responses) {
@@ -57,9 +58,14 @@ test('ownership is enforced by the tool, not trusted to the model', async (t) =>
   assert.doesNotMatch(result, /Riverton|in production/);
 });
 
-test('a refusal becomes an error the runner can retry', async (t) => {
-  mockAnthropic(t, { stop_reason: 'refusal', content: [] });
-  await assert.rejects(llmAgent({ message: 'hi', context: {} }), /refused/);
+test('a refusal or a max_tokens cut-off is an error the runner does not retry', async (t) => {
+  mockAnthropic(t, { stop_reason: 'refusal', content: [] }, { stop_reason: 'max_tokens', content: [] });
+  for (const pattern of [/refused/, /max_tokens/]) {
+    await assert.rejects(llmAgent({ message: 'hi', context: {} }), (err) => {
+      assert.match(err.message, pattern);
+      return err.retryable === false && !isTransient(err);
+    });
+  }
 });
 
 test('an HTTP error keeps its status and drops the key', async (t) => {

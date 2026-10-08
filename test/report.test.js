@@ -54,8 +54,24 @@ test('warns when nothing is critical or a pass checked nothing', () => {
   const unchecked = summarize([result('a', 'pass')]);
   assert.equal(unchecked.gate.pass, true);
   assert.match(unchecked.warnings[0], /no critical cases/);
-  assert.match(unchecked.warnings[1], /no rule and no judge verdict.*: a/);
+  assert.match(unchecked.warnings[1], /no rule and no real judge.*: a/);
   assert.match(formatSummary(unchecked), /WARNING: no critical cases/);
   const checked = { ...result('b', 'pass', true), checks: [{ rule: 'tools', pass: true, detail: '' }] };
   assert.deepEqual(summarize([checked]).warnings, []);
+});
+
+test('a critical case that passed on the rubric alone without a real judge fails the gate', () => {
+  const mockVerdict = { pass: true, reason: 'mock heuristics passed', graded: false, attempts: 1 };
+  const rubricOnly = { ...result('crit', 'pass', true), verdict: mockVerdict };
+  const s = summarize([...many(9, 'pass'), rubricOnly], { minPassRate: 0 });
+  assert.equal(s.gate.pass, false);
+  assert.match(s.gate.reasons.join('\n'), /passed on the rubric alone with no real judge.*: crit$/);
+
+  const noJudge = { ...rubricOnly, verdict: { pass: null, reason: 'no judge', graded: false, attempts: 0 } };
+  assert.equal(summarize([noJudge], { minPassRate: 0 }).gate.pass, false);
+
+  const realJudge = { ...rubricOnly, verdict: { ...mockVerdict, graded: true } };
+  assert.equal(summarize([realJudge], { minPassRate: 0 }).gate.pass, true);
+  const withRule = { ...rubricOnly, checks: [{ rule: 'excludes', pass: true, detail: '' }] };
+  assert.equal(summarize([withRule], { minPassRate: 0 }).gate.pass, true);
 });

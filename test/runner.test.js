@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { runCase, runSuite, normalizeOutput, isTransient } from '../src/runner.js';
+import { runCase, runSuite, normalizeOutput, isTransient, retryDelay } from '../src/runner.js';
 
 const scenario = (extra = {}) => ({ id: 's1', category: 'c', message: 'hi', expect: { anyTool: false }, ...extra });
 const okAgent = async () => ({ reply: 'hello', toolCalls: [] });
@@ -23,17 +23,41 @@ test('the agent receives message, context and an abort signal', async () => {
   assert.ok(seen.signal instanceof AbortSignal);
 });
 
-test('throws are retried, then reported as errors', async () => {
+test('the agent never sees the expected answers', async () => {
+  let seen;
+  const s = scenario({ context: { customerId: 'u1' }, expect: { excludes: ['SECRET-RULE'] }, rubric: 'SECRET-RUBRIC' });
+  await runCase(s, { agent: async (input) => { seen = input; return { reply: 'x' }; } });
+  assert.deepEqual(Object.keys(seen).sort(), ['context', 'message', 'signal']);
+  assert.doesNotMatch(JSON.stringify(seen), /SECRET-RULE|SECRET-RUBRIC/);
+});
+
+const http = (status) => Object.assign(new Error(`HTTP ${status}`), { status });
+const withCode = (code) => Object.assign(new Error(code), { code });
+const fetchFailed = () => new TypeError('fetch failed', { cause: withCode('ECONNRESET') });
+
+test('infrastructure failures are retried, then reported as errors', async () => {
   let calls = 0;
-  const flaky = async () => { calls += 1; if (calls === 1) throw new Error('503'); return { reply: 'ok' }; };
-  const r = await runCase(scenario(), { agent: flaky, retries: 1 });
+  const flaky = async () => { calls += 1; if (calls === 1) throw http(503); return { reply: 'ok' }; };
+  const r = await runCase(scenario(), { agent: flaky, retries: 1, retryDelayMs: 0 });
   assert.equal(r.status, 'pass');
   assert.equal(r.attempts, 2);
 
-  const broken = await runCase(scenario(), { agent: async () => { throw new Error('down'); }, retries: 2 });
+  const down = async () => { throw fetchFailed(); };
+  const broken = await runCase(scenario(), { agent: down, retries: 2, retryDelayMs: 0 });
   assert.equal(broken.status, 'error');
   assert.equal(broken.attempts, 3);
-  assert.equal(broken.error, 'down');
+  assert.equal(broken.error, 'fetch failed');
+});
+
+test('an agent bug or a non-retryable error is reported at once', async () => {
+  for (const err of [new TypeError("Cannot read properties of undefined (reading 'x')"), new Error('down'),
+    Object.assign(new Error('model refused to answer'), { retryable: false }),
+    Object.assign(new Error('HTTP 503'), { status: 503, retryable: false })]) {
+    let calls = 0;
+    const r = await runCase(scenario(), { agent: async () => { calls += 1; throw err; }, retries: 3 });
+    assert.equal(r.status, 'error', err.message);
+    assert.equal(calls, 1, err.message);
+  }
 });
 
 test('a slow agent times out and the signal is aborted', async () => {
@@ -66,11 +90,42 @@ test('normalizeOutput accepts bare tool names and rejects malformed calls', () =
   assert.throws(() => normalizeOutput({ reply: 'x', toolCalls: [null] }), /toolCalls\[0\] must be a tool name/);
 });
 
-test('isTransient retries the network, 429 and 5xx, but not other 4xx', () => {
-  const cases = [[undefined, true], [429, true], [500, true], [401, false], [400, false]];
-  for (const [status, expected] of cases) {
-    assert.equal(isTransient(Object.assign(new Error('x'), { status })), expected, String(status));
-  }
+test('isTransient retries the network, aborts, timeouts, 429 and 5xx, and nothing else', () => {
+  const cases = [
+    ['429', http(429), true], ['500', http(500), true], ['401', http(401), false], ['400', http(400), false],
+    ['fetch failed', fetchFailed(), true], ['ECONNREFUSED', withCode('ECONNREFUSED'), true],
+    ['AbortError', new DOMException('aborted', 'AbortError'), true],
+    ['TimeoutError', new DOMException('timed out', 'TimeoutError'), true],
+    ['plain error', new Error('x'), false], ['bug', new TypeError('x is not a function'), false],
+    ['retryable false', Object.assign(http(429), { retryable: false }), false],
+  ];
+  for (const [label, err, expected] of cases) assert.equal(isTransient(err), expected, label);
+});
+
+test('retries back off exponentially with full jitter, capped', (t) => {
+  t.mock.method(Math, 'random', () => 1);
+  assert.deepEqual([1, 2, 3, 4, 10].map((n) => retryDelay(new Error('x'), n, 500)), [500, 1000, 2000, 4000, 8000]);
+  Math.random.mock.mockImplementation(() => 0.25);
+  assert.equal(retryDelay(new Error('x'), 3, 500), 500);
+  assert.equal(retryDelay(new Error('x'), 1, 0), 0);
+});
+
+test('Retry-After wins over the backoff, within a sane cap', () => {
+  assert.equal(retryDelay(Object.assign(http(429), { retryAfterMs: 2000 }), 1, 0), 2000);
+  assert.equal(retryDelay(Object.assign(http(429), { retryAfterMs: 3_600_000 }), 1), 60_000);
+  assert.equal(retryDelay(Object.assign(http(429), { retryAfterMs: undefined }), 1, 0), 0);
+});
+
+test('the runner waits for Retry-After before retrying', async () => {
+  const times = [];
+  const limited = async () => {
+    times.push(performance.now());
+    if (times.length === 1) throw Object.assign(http(429), { retryAfterMs: 40 });
+    return { reply: 'ok' };
+  };
+  const r = await runCase(scenario(), { agent: limited, retries: 1, retryDelayMs: 0 });
+  assert.equal(r.status, 'pass');
+  assert.ok(times[1] - times[0] >= 35, `waited ${times[1] - times[0]} ms`);
 });
 
 test('an agent that hangs once is retried and answers on the second attempt', async () => {
@@ -79,7 +134,7 @@ test('an agent that hangs once is retried and answers on the second attempt', as
     calls += 1;
     return calls === 1 ? new Promise(() => {}) : Promise.resolve({ reply: 'ok' });
   };
-  const r = await runCase(scenario(), { agent: hangsOnce, timeoutMs: 20, retries: 1 });
+  const r = await runCase(scenario(), { agent: hangsOnce, timeoutMs: 20, retries: 1, retryDelayMs: 0 });
   assert.equal(r.status, 'pass');
   assert.equal(r.attempts, 2);
 });
@@ -110,7 +165,7 @@ test('an undecided or crashing judge marks the case as error', async () => {
   const s = scenario({ rubric: 'r' });
   const unsure = await runCase(s, { agent: okAgent, judge: async () => ({ pass: null, reason: 'bad json' }) });
   assert.equal(unsure.status, 'error');
-  const crash = await runCase(s, { agent: okAgent, judge: async () => { throw new Error('429'); } });
+  const crash = await runCase(s, { agent: okAgent, judge: async () => { throw http(429); }, retries: 0 });
   assert.equal(crash.status, 'error');
   assert.match(crash.verdict.reason, /429/);
 });
@@ -147,7 +202,7 @@ test('transient judge errors are retried, a bad request is not', async () => {
     if (calls === 1) throw Object.assign(new Error('HTTP 429: slow down'), { status: 429 });
     return { pass: true, reason: 'ok' };
   };
-  const r = await runCase(s, { agent: okAgent, judge: hiccup, retries: 1 });
+  const r = await runCase(s, { agent: okAgent, judge: hiccup, retries: 1, retryDelayMs: 0 });
   assert.equal(r.status, 'pass');
   assert.equal(r.verdict.attempts, 2);
 
@@ -167,14 +222,14 @@ test('transient judge errors are retried, a bad request is not', async () => {
 test('runSuite keeps input order and never exceeds the concurrency limit', async () => {
   let inFlight = 0;
   let peak = 0;
-  const agent = async ({ scenario: s }) => {
+  const agent = async ({ message }) => {
     inFlight += 1;
     peak = Math.max(peak, inFlight);
-    await new Promise((r) => setTimeout(r, 5 + (Number(s.id) % 3) * 5));
+    await new Promise((r) => setTimeout(r, 5 + (Number(message) % 3) * 5));
     inFlight -= 1;
-    return { reply: s.id };
+    return { reply: message };
   };
-  const bank = Array.from({ length: 10 }, (_, i) => scenario({ id: String(i) }));
+  const bank = Array.from({ length: 10 }, (_, i) => scenario({ id: String(i), message: String(i) }));
   const seen = [];
   const results = await runSuite(bank, { agent, concurrency: 3, onResult: (r) => seen.push(r.id) });
   assert.equal(peak, 3);
@@ -184,4 +239,16 @@ test('runSuite keeps input order and never exceeds the concurrency limit', async
 
 test('runSuite rejects a missing agent', async () => {
   await assert.rejects(runSuite([], {}), /needs an agent/);
+});
+
+test('verdicts say whether a judge read the rubric', async () => {
+  const s = scenario({ rubric: 'r' });
+  const real = await runCase(s, { agent: okAgent, judge: async () => ({ pass: true, reason: 'ok' }) });
+  assert.equal(real.verdict.graded, true);
+  const mock = await runCase(s, { agent: okAgent, judge: async () => ({ pass: true, reason: 'ok', graded: false }) });
+  assert.equal(mock.verdict.graded, false);
+  const none = await runCase(s, { agent: okAgent });
+  assert.equal(none.status, 'pass');
+  assert.deepEqual(none.verdict, { pass: null, reason: 'rubric not graded: no judge', graded: false, attempts: 0 });
+  assert.equal((await runCase(scenario(), { agent: okAgent })).verdict, null, 'no rubric, nothing to grade');
 });

@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { validateExpectation } from './expectations.js';
+import { isObject, validateExpectation } from './expectations.js';
 
 /**
  * @typedef {object} Scenario
@@ -11,8 +11,6 @@ import { validateExpectation } from './expectations.js';
  * @property {Record<string, unknown>} [expect]   Rule-based expectations, see expectations.js.
  * @property {string} [rubric]      Plain-language criteria for the LLM judge.
  */
-
-const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
 /**
  * Problems with one scenario, each prefixed with `at`.
@@ -31,6 +29,8 @@ function validateScenario(s, at) {
 
   const rules = isObject(s.expect) ? Object.entries(s.expect) : [];
   if (!rules.length && !s.rubric) errors.push('needs "expect" rules, a "rubric", or both');
+  // A rubric alone is only as good as the judge, and the mock judge does not read it.
+  if (s.critical === true && !rules.length) errors.push('a critical case needs at least one "expect" rule');
   for (const [key, value] of rules) {
     const problem = validateExpectation(key, value);
     if (problem) errors.push(problem);
@@ -72,7 +72,13 @@ export function validateScenarios(bank) {
  */
 export async function loadScenarios(file) {
   const raw = await readFile(file, 'utf8');
-  return validateScenarios(JSON.parse(raw));
+  let bank;
+  try {
+    bank = JSON.parse(raw);
+  } catch (err) {
+    throw new Error(`${file}: invalid JSON: ${err.message}`);
+  }
+  return validateScenarios(bank);
 }
 
 /**

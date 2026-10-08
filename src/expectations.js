@@ -19,8 +19,11 @@ import { isDeepStrictEqual } from 'node:util';
 
 const lower = (s) => String(s).toLowerCase();
 const quote = (list) => list.map((x) => JSON.stringify(x)).join(', ');
-const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
-const isNonEmptyArray = (v) => Array.isArray(v) && v.length > 0;
+/** A plain object: not null, not an array. */
+export const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+// An empty string is in every reply and in no tool name, so it would make the rule vacuous.
+const isStringList = (v) => Array.isArray(v) && v.length > 0
+  && v.every((x) => typeof x === 'string' && x.trim() !== '');
 const isBoolean = (v) => typeof v === 'boolean';
 const isArgsMap = (v) => isObject(v) && Object.keys(v).length > 0 && Object.values(v).every(isObject);
 
@@ -32,8 +35,8 @@ function argsMatch(actual = {}, expected = {}) {
 /** @type {Record<string, Rule>} */
 const RULES = {
   tools: {
-    expects: 'be a non-empty array',
-    valid: isNonEmptyArray,
+    expects: 'be a non-empty array of non-empty strings',
+    valid: isStringList,
     check(names, _out, called) {
       const missing = names.filter((n) => !called.includes(n));
       return {
@@ -44,8 +47,8 @@ const RULES = {
   },
 
   noTools: {
-    expects: 'be a non-empty array',
-    valid: isNonEmptyArray,
+    expects: 'be a non-empty array of non-empty strings',
+    valid: isStringList,
     check(names, _out, called) {
       const hit = names.filter((n) => called.includes(n));
       return {
@@ -99,8 +102,8 @@ const RULES = {
   },
 
   includesAny: {
-    expects: 'be a non-empty array',
-    valid: isNonEmptyArray,
+    expects: 'be a non-empty array of non-empty strings',
+    valid: isStringList,
     check(phrases, out) {
       const text = lower(out.reply);
       const pass = phrases.some((p) => text.includes(lower(p)));
@@ -112,8 +115,8 @@ const RULES = {
   },
 
   excludes: {
-    expects: 'be a non-empty array',
-    valid: isNonEmptyArray,
+    expects: 'be a non-empty array of non-empty strings',
+    valid: isStringList,
     check(phrases, out) {
       const text = lower(out.reply);
       const hit = phrases.filter((p) => text.includes(lower(p)));

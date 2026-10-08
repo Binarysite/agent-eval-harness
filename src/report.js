@@ -2,10 +2,12 @@
  * Summary, gating and output formatting.
  *
  * The gate has two independent conditions:
- *   1. every critical case passed, and
+ *   1. every critical case passed, on a rule or a real judge, and
  *   2. the overall pass rate is at least `minPassRate`.
  * Condition 1 is not averaged away: 23 of 24 green with the one red case being
- * "leaked another customer's address" is a failed run, not a 96% run.
+ * "leaked another customer's address" is a failed run, not a 96% run. A critical
+ * case that passed with no rule and only a mock (or no) judge proved nothing, so
+ * it fails the gate too.
  *
  * @typedef {import('./runner.js').CaseResult} CaseResult
  * @typedef {ReturnType<typeof summarize>} Summary
@@ -30,9 +32,19 @@ export function summarize(results, { minPassRate = 0.9 } = {}) {
     if (r.status === 'pass') c.passed += 1;
   }
 
+  // Passed, but nothing checked it: no rule ran and no judge read the rubric.
+  const unchecked = results.filter((r) => r.status === 'pass' && !r.checks.length && r.verdict?.graded !== true);
+  const criticalUnchecked = unchecked.filter((r) => r.critical).map((r) => r.id);
+
   const reasons = [];
   if (!results.length) reasons.push('no scenarios selected');
   if (criticalFailures.length) reasons.push(`critical case(s) not passing: ${criticalFailures.join(', ')}`);
+  if (criticalUnchecked.length) {
+    reasons.push(
+      `critical case(s) passed on the rubric alone with no real judge (mock or none does not read rubrics); `
+        + `add an "expect" rule or run an LLM judge: ${criticalUnchecked.join(', ')}`,
+    );
+  }
   if (results.length && passRate < minPassRate) {
     reasons.push(`pass rate ${pct(passRate)} is below the minimum ${pct(minPassRate)}`);
   }
@@ -42,9 +54,11 @@ export function summarize(results, { minPassRate = 0.9 } = {}) {
   if (results.length && !critical.length) {
     warnings.push('no critical cases selected, so only the pass rate gates this run');
   }
-  const unchecked = results.filter((r) => r.status === 'pass' && !r.checks.length && !r.verdict).map((r) => r.id);
-  if (unchecked.length) {
-    warnings.push(`passed with no rule and no judge verdict (rubric-only with --judge none?): ${unchecked.join(', ')}`);
+  const uncheckedOther = unchecked.filter((r) => !r.critical).map((r) => r.id);
+  if (uncheckedOther.length) {
+    warnings.push(
+      `passed with no rule and no real judge (rubric-only with --judge mock or none): ${uncheckedOther.join(', ')}`,
+    );
   }
 
   return {
@@ -80,7 +94,7 @@ export function formatCase(r, { verbose = false } = {}) {
   const why = [];
   if (r.error) why.push(`error: ${r.error}${r.attempts > 1 ? ` (after ${r.attempts} attempts)` : ''}`);
   for (const c of r.checks) if (!c.pass) why.push(`${c.rule}: ${c.detail}`);
-  if (r.verdict && r.verdict.pass !== true) why.push(`judge: ${r.verdict.reason}`);
+  if (r.status !== 'pass' && r.verdict && r.verdict.pass !== true) why.push(`judge: ${r.verdict.reason}`);
   if (verbose && r.output) {
     why.push(`reply: ${r.output.reply}`);
     if (r.output.toolCalls.length) why.push(`tools: ${r.output.toolCalls.map((c) => c.name).join(', ')}`);

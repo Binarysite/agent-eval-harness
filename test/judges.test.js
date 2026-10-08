@@ -8,7 +8,7 @@ import {
   createOpenAICompatibleJudge,
   JUDGE_SYSTEM,
 } from '../src/judges/llm.js';
-import { runSuite } from '../src/runner.js';
+import { runSuite, isTransient } from '../src/runner.js';
 import { summarize, buildReport } from '../src/report.js';
 
 const output = (reply, toolCalls = []) => ({ reply, toolCalls });
@@ -19,6 +19,7 @@ test('mock judge is deterministic and explains every verdict', async () => {
   assert.deepEqual(await judge({ scenario, output: output('A teammate will reply here.') }), {
     pass: true,
     reason: 'mock heuristics passed (rubric not graded)',
+    graded: false,
   });
   assert.equal((await judge({ scenario, output: output('   ') })).reason, 'empty reply');
   assert.match((await judge({ scenario, output: output('x'.repeat(41)) })).reason, /41 chars, limit 40/);
@@ -55,8 +56,8 @@ function mockFetch(t, ...responses) {
   const calls = [];
   t.mock.method(globalThis, 'fetch', async (url, init) => {
     calls.push({ url, headers: init.headers, body: JSON.parse(init.body) });
-    const { status = 200, body } = responses.shift();
-    return new Response(typeof body === 'string' ? body : JSON.stringify(body), { status });
+    const { status = 200, body, headers } = responses.shift();
+    return new Response(typeof body === 'string' ? body : JSON.stringify(body), { status, headers });
   });
   return calls;
 }
@@ -95,6 +96,37 @@ test('Anthropic judge: refusal and unparseable text are undecided, HTTP errors c
     judge({ scenario, output: output('x') }),
     (err) => err.status === 429 && /HTTP 429: rate limited/.test(err.message),
   );
+});
+
+test('a verdict cut off at the token limit is a clear error the runner does not retry', async (t) => {
+  mockFetch(
+    t,
+    anthropicText('{"pass": tr', { stop_reason: 'max_tokens' }),
+    { body: { choices: [{ message: { content: '{"pass": tr' }, finish_reason: 'length' }] } },
+  );
+  const judges = [createAnthropicJudge({ apiKey: KEY }), createOpenAICompatibleJudge({ apiKey: KEY, model: 'm' })];
+  for (const judge of judges) {
+    await assert.rejects(judge({ scenario, output: output('x') }), (err) => {
+      assert.match(err.message, /cut off at the token limit/);
+      return err.retryable === false && !isTransient(err);
+    });
+  }
+});
+
+test('a 429 carries the Retry-After the server sent, in ms', async (t) => {
+  const date = new Date(Date.now() + 30_000).toUTCString();
+  mockFetch(
+    t,
+    { status: 429, body: 'slow down', headers: { 'retry-after': '2' } },
+    { status: 429, body: 'slow down', headers: { 'retry-after': date } },
+    { status: 429, body: 'slow down' },
+  );
+  const judge = createAnthropicJudge({ apiKey: KEY });
+  const retryAfter = async () => judge({ scenario, output: output('x') }).catch((err) => err.retryAfterMs);
+  assert.equal(await retryAfter(), 2000);
+  const fromDate = await retryAfter();
+  assert.ok(fromDate > 25_000 && fromDate <= 30_000, String(fromDate));
+  assert.equal(await retryAfter(), undefined);
 });
 
 test('HTTP error messages never carry the key, raw or masked', async (t) => {

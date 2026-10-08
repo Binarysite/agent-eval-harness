@@ -3,14 +3,14 @@
  * over plain fetch so the package keeps zero dependencies. It runs against the
  * same 24 scenarios as the rule-based example.
  *
- *   ANTHROPIC_API_KEY=... npm run eval -- -a examples/llm-agent/agent.js --judge anthropic
+ *   ANTHROPIC_API_KEY=... npm run eval -- -a examples/llm-agent/agent.js --judge anthropic --timeout 60000
  *
  * Env: ANTHROPIC_API_KEY (required), AGENT_MODEL (default claude-opus-5-5).
  * Tools the agent must never use (issue_refund, send_message...) are not offered
  * at all. The scenario rules still catch a future change that adds them.
  */
 import { ORDERS, preflight } from '../sticker-shop/agent.js';
-import { redactSecrets } from '../../src/judges/llm.js';
+import { postJSON } from '../../src/http.js';
 
 const MAX_TURNS = 6;
 
@@ -112,10 +112,10 @@ export default async function llmAgent({ message, context, signal }) {
   const toolCalls = [];
 
   for (let turn = 0; turn < MAX_TURNS; turn += 1) {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({
+    const data = await postJSON(
+      'https://api.anthropic.com/v1/messages',
+      { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+      {
         model: process.env.AGENT_MODEL || 'claude-opus-5-5',
         max_tokens: 4096,
         // Support replies are short, and low effort keeps a full suite run cheap.
@@ -123,16 +123,14 @@ export default async function llmAgent({ message, context, signal }) {
         system: `${SYSTEM} Signed in as ${seller ? `seller ${context.sellerId}` : `customer ${context.customerId}`}.`,
         tools: seller ? SELLER_TOOLS : CUSTOMER_TOOLS,
         messages,
-      }),
-      signal,
-    });
-    if (!res.ok) {
-      const detail = redactSecrets(await res.text(), [apiKey]).slice(0, 200);
-      throw Object.assign(new Error(`HTTP ${res.status}: ${detail}`), { status: res.status });
+      },
+      { signal, apiKey },
+    );
+    // Same prompt, same outcome: retrying a refusal or a cut-off only costs money.
+    if (data.stop_reason === 'refusal') throw Object.assign(new Error('model refused to answer'), { retryable: false });
+    if (data.stop_reason === 'max_tokens') {
+      throw Object.assign(new Error('reply was cut off at max_tokens'), { retryable: false });
     }
-    const data = await res.json();
-    if (data.stop_reason === 'refusal') throw new Error('model refused to answer');
-    if (data.stop_reason === 'max_tokens') throw new Error('reply was cut off at max_tokens');
 
     // Send the whole content back unchanged, thinking blocks included.
     messages.push({ role: 'assistant', content: data.content });

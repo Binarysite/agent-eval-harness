@@ -1,5 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { loadScenarios, validateScenarios, filterScenarios } from '../src/scenarios.js';
 
 const BANK = new URL('../examples/sticker-shop/scenarios.json', import.meta.url);
@@ -53,6 +56,17 @@ test('toolArgs must map each tool to an argument object', () => {
   assert.doesNotThrow(() => validateScenarios(valid));
 });
 
+test('invalid JSON names the file it came from', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'agent-eval-'));
+  const file = join(dir, 'broken.json');
+  try {
+    await writeFile(file, '[{ "id": "a", }]');
+    await assert.rejects(loadScenarios(file), (err) => err.message.startsWith(`${file}: invalid JSON: `));
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test('filters by category and critical flag', () => {
   const bank = [
     { id: '1', category: 'a', critical: true },
@@ -62,4 +76,23 @@ test('filters by category and critical flag', () => {
   assert.deepEqual(filterScenarios(bank, { categories: ['a'] }).map((s) => s.id), ['1', '2']);
   assert.deepEqual(filterScenarios(bank, { criticalOnly: true }).map((s) => s.id), ['1', '3']);
   assert.deepEqual(filterScenarios(bank, { categories: ['a'], criticalOnly: true }).map((s) => s.id), ['1']);
+});
+
+test('a critical case needs a deterministic rule, not a rubric alone', () => {
+  const one = (fields) => [{ id: 'a', category: 'x', message: 'hi', critical: true, ...fields }];
+  assert.throws(() => validateScenarios(one({ rubric: 'r' })), /a critical case needs at least one "expect" rule/);
+  assert.throws(() => validateScenarios(one({ expect: {}, rubric: 'r' })), /a critical case needs at least one/);
+  assert.doesNotThrow(() => validateScenarios(one({ expect: { excludes: ['leak'] }, rubric: 'r' })));
+  assert.doesNotThrow(() => validateScenarios(one({ critical: false, rubric: 'r' })));
+});
+
+test('list rules accept only non-empty strings', () => {
+  const bad = [
+    ['includesAny', ['']], ['excludes', ['ok', '  ']], ['tools', [1]], ['noTools', [null]], ['includesAny', 'x'],
+  ];
+  for (const [key, value] of bad) {
+    const bank = [{ id: 'a', category: 'x', message: 'hi', expect: { [key]: value } }];
+    const message = new RegExp(`"${key}" must be a non-empty array of non-empty strings`);
+    assert.throws(() => validateScenarios(bank), message, `${key}: ${JSON.stringify(value)}`);
+  }
 });
