@@ -31,7 +31,10 @@ RESULT: FAIL
   - critical case(s) not passing: prv-01
 ```
 
-Exit code 1. `npm run eval` runs the healthy agent and exits 0.
+Exit code 1. `examples/sticker-shop/regressed-agent.js` is the healthy agent with
+its order ownership check switched off, the kind of guard a refactor drops by
+accident. 95.8% clears the 90% bar, so a pass rate alone would have shipped it.
+`npm run eval` runs the healthy agent against the same 24 scenarios and exits 0.
 
 ```mermaid
 flowchart LR
@@ -43,74 +46,9 @@ flowchart LR
   G --> P["Report<br/>JSON + exit code"]
 ```
 
-Agent and judge are plain functions you pass in; the harness knows nothing about
-models or vendors. I extracted it from the evaluation harness I built for a
-multi-tenant customer-service agent, now in a live trial
-(294 scenarios, 65 of them critical).
-Those scenarios, prompts and data are not published; everything here, including
-the sticker shop, is invented for the example.
+Extracted from the eval harness of a multi-tenant customer-service agent in a trial (294 scenarios, 65 critical); that bank, its prompts and data are private, and the sticker shop here is invented.
+Every failure found while testing the live sales assistant before launch is turned into a regression case in the corpus (for example, unrecognised local-slang insults and a malformed business-name capture).
 Built with Claude Code; the design decisions and reviews are mine.
-
-## The problem
-
-Agent evals are not unit tests. The same input can produce many correct replies,
-the model changes under you, and the failures that matter are rare. So the
-harness asks two separate questions: did any critical case fail (if yes, the run
-fails), and is the overall pass rate above the bar (this catches broad
-regressions).
-
-## Quickstart
-
-```bash
-npm test && npm run eval
-npm run lint    # node --check on every .js file, no tabs or trailing spaces
-```
-
-`npm run eval` runs 24 invented scenarios for a fictional custom sticker shop
-(order status, refunds, artwork pre-flight, proof changes, prompt injection,
-privacy, seller drafts, escalation) against a deterministic example agent and a
-deterministic mock judge. It ends like this, exit code 0:
-
-```text
-Total 24  passed 24  failed 0  errors 0  pass rate 100.0% (min 90.0%)
-Critical 8  passed 8
-RESULT: PASS
-Report: reports/eval-report.json
-```
-
-`examples/sticker-shop/regressed-agent.js`, the one at the top, is the same agent
-with the order ownership check switched off
-(`createAgent({ privacyGuard: false })`), the kind of guard a refactor drops by
-accident. 95.8% clears the 90% bar, so a pass rate alone would have shipped it.
-The exit code is 1 because `prv-01` is critical. Every case also lands in the
-JSON report with the reply, tool calls, each check and the judge verdict.
-
-### Comparing two runs
-
-`compare` lists only the cases that changed status and exits 1 if one that
-passed no longer does. Save one report per run, then compare them (real output,
-green run against the regressed one):
-
-```bash
-npm run eval -- --out reports/main.json
-npm run eval:regression -- --out reports/branch.json
-node bin/eval.js compare reports/main.json reports/branch.json
-```
-
-```text
-pass    -> fail    prv-01  [critical]
-
-Pass rate 100.0% -> 95.8%  regressions 1
-```
-
-CI uploads each run's report as an artifact, so the `main` report is there to
-compare against. Each report's `meta` records `judgeModel`, `agentModel` (when the
-agent function has a `model` property, else `null`), the bank's `scenariosSha256`
-and the `gitSha`, and `compare` warns when any of them differ.
-
-`--trials k` (`trials` in the API, default 1) runs each case k times. Mixed
-results mark the case flaky in the summary; a critical case must pass k of k,
-any other case a majority.
 
 ## Writing scenarios
 
@@ -136,126 +74,24 @@ any other case a majority.
 | `includesAny: [..]` | the reply contains at least one phrase (case-insensitive) |
 | `excludes: [..]` | the reply contains none of the phrases |
 
-`rubric` is plain language for the LLM judge. `context` is passed to the agent
-untouched (signed-in customer, role, locale). Unknown rule names fail
-validation, so a typo like `exclude` cannot silently become "no check". So does
-an empty `expect` with no rubric, which would pass without checking anything,
-and an empty string in a list rule, which every reply contains.
-
-Each case ends as `pass`, `fail` (a rule or the judge said no) or `error` (the
-agent threw, timed out, returned a malformed result, or the judge could not
-decide).
-
-A good scenario has one behavior to test, rules for whatever can be checked
-mechanically, a rubric for the rest, and `"critical": true` only if a failure
-would block a release. Append it to `examples/sticker-shop/scenarios.json`, or
-point `--scenarios` at your own file, and run a subset while iterating:
-
-```bash
-npm run eval -- --category privacy,prompt_injection -v   # -v prints replies and tool calls
-npm run eval -- --critical                               # only release blockers
-```
-
-## Design decisions and trade-offs
-
-**Rules first, judge second.** Rules are free, deterministic and explain
-themselves: "called `issue_refund`" needs no model to verify. The judge covers
-what rules cannot, like "asked for the order number instead of guessing". The
-judge only runs when every rule passed, so you never pay to grade a reply that
-already failed.
-
-**Critical gating instead of weighting.** Weights invite arguments about whether
-a leak is worth 5 points or 50. A boolean is easier to reason about: some
-behaviors are release blockers, and the bank says which ones. Critical cases
-pair a rule (the literal leak) with a rubric (the paraphrased leak). Validation
-requires the rule, and a critical case that passes on its rubric alone with the
-mock judge or no judge fails the gate, because neither reads the rubric (their
-verdicts record `graded: false`).
-
-**Retries for infrastructure, never for answers.** Agent and judge share one
-policy: a network error, an abort or timeout, a 429 or a 5xx is retried
-(`--retries`, default 1; the result and the verdict record their `attempts`),
-after the server's `Retry-After` when the error carries one (`retryAfterMs`,
-filled in from the header by the bundled judges and the example agent, capped at
-60 s) or else an exponential backoff with full jitter (`retryDelayMs`, default
-500 ms, capped at 8 s).
-Anything else is not retried because it would fail the same way: any other 4xx
-(a bad key, a bad request), an error marked `retryable: false` (a refusal, a
-reply cut off at `max_tokens`) or a plain bug in the agent. A wrong answer, or
-a "no" from the judge, is never retried: retrying until green hides exactly the
-flakiness an eval exists to show.
-
-**An undecided judge is an error, not a pass.** Unparseable JSON, a refusal, a
-verdict without a boolean `pass`, or a judge that still fails after its retries
-marks the case `error`, which counts against the pass rate and blocks the run if
-the case is critical. The summary also warns when nothing in the selection is
-critical, or when a case passed with no rule and no real judge (a rubric-only
-case run with `--judge mock` or `--judge none`).
-
-**Everything is injected.** The agent is `({ message, context, signal }) =>
-{ reply, toolCalls }` and the judge is `({ scenario, output, signal }) =>
-{ pass, reason }`. The harness knows nothing about models, prompts or vendors,
-which is what lets you run the same bank against two models and compare.
-
-**Zero runtime dependencies.** Node 22+, `node:test` for tests, `fetch` for the
-optional LLM judges.
-
-## Known limits
-
-- **LLM judges make mistakes in both directions.** A strict judge produces false
-  negatives (a correct reply phrased differently, or "should also have called
-  tool X" when it did not need to). A lenient one waves through confident
-  nonsense. Read the failing verdicts before trusting a number, pin the judge
-  model, and treat a judge or rubric change as an eval change, not a free
-  improvement.
-- **Substring rules are literal.** `excludes` catches "Riverton", not "a town by
-  the river". That is why critical cases also carry a rubric.
-- **The mock judge does not read the rubric.** It applies generic heuristics
-  (empty reply, too long, "guarantee") so the pipeline runs offline. A mock
-  pass means "nothing obviously wrong".
-- **Single turn per scenario.** Multi-turn flows can be tested by having your
-  agent function replay a scripted history, but the scenario format does not
-  model conversations yet.
-- **Small banks give coarse rates.** With 24 cases, one case is 4.2 points.
-  Look at which cases moved, not only the percentage.
-- **A timeout aborts the signal, it cannot stop your code.** An agent that
-  ignores `signal` may keep running after the harness has moved on.
-
-## Running a real LLM agent
-
-`examples/llm-agent/agent.js` is a Claude agent with tool use (plain `fetch`)
-for the same shop, tools and orders, so it runs against the same 24 scenarios:
-
-```bash
-ANTHROPIC_API_KEY=... npm run eval -- -a examples/llm-agent/agent.js --judge anthropic --timeout 60000
-```
-
-The default `--timeout` of 10 s suits the offline example; a tool loop or an
-LLM judge can take longer than that, and a timed-out call is retried and billed
-again.
-
-Its tool loop, the tool results it sends back and the ownership check inside
-`lookup_order` are covered offline in `test/llm-agent.test.js` against a mocked
-Messages API. Expect some `includesAny` failures where the model phrases a
-correct answer differently from the rule. That is the
-[substring limit](#known-limits), and the reason those cases also carry a
-rubric. `AGENT_MODEL` picks the model (default `claude-opus-5-5`).
+`rubric` is plain language for the LLM judge, which only runs when every rule
+passed. `context` is passed to the agent untouched. Unknown rule names, an empty
+`expect` with no rubric and an empty string in a list rule all fail validation,
+so a typo cannot silently become "no check". A critical case needs at least one
+rule. Each case ends as `pass`, `fail` (a rule or the judge said no) or `error`
+(the agent threw or timed out, or the judge could not decide). While iterating,
+`npm run eval -- --category privacy -v` runs one category and prints every reply,
+and `--critical` runs only the release blockers.
 
 ## Connecting your own agent
 
-Export the agent as the module's default export. Map your agent's result into
-`{ reply, toolCalls }`:
+The agent is the default export of a module: `({ message, context, signal }) =>
+{ reply, toolCalls }`. Map your stack's result into that shape:
 
 ```js
-// my-agent.js
-import { runSupportAgent } from './support-agent.js';
-
 export default async function agent({ message, context, signal }) {
   const res = await runSupportAgent({ message, customerId: context.customerId, signal });
-  return {
-    reply: res.text,
-    toolCalls: res.toolUses.map((t) => ({ name: t.name, args: t.input })),
-  };
+  return { reply: res.text, toolCalls: res.toolUses.map((t) => ({ name: t.name, args: t.input })) };
 }
 ```
 
@@ -263,59 +99,29 @@ export default async function agent({ message, context, signal }) {
 ANTHROPIC_API_KEY=... node bin/eval.js -s ./my-scenarios.json -a ./my-agent.js --judge anthropic --timeout 60000
 ```
 
-`--scenarios` and `--agent` are required; the npm scripts point them at the
-example. Throw an `Error` with a numeric `status` for HTTP failures, so a 429 or
-a 5xx is retried and a 401 is not, add `retryAfterMs` if the server sent
-`Retry-After`, and set `retryable: false` on an error that would repeat, such as
-a refusal.
-
 | `--judge` | Environment |
 |---|---|
-| `mock` (default) | none |
+| `mock` (default) | none; does not read the rubric |
 | `anthropic` | `ANTHROPIC_API_KEY`, optional `JUDGE_MODEL` (default `claude-sonnet-5-5`) |
-| `openai` | `OPENAI_API_KEY`, `JUDGE_MODEL`, optional `OPENAI_BASE_URL` for any OpenAI-compatible endpoint (for example `https://api.x.ai/v1` for Grok) |
+| `openai` | `OPENAI_API_KEY`, `JUDGE_MODEL`, optional `OPENAI_BASE_URL` for any OpenAI-compatible endpoint |
 | `none` | rules only |
 
-Keys are read from the environment only and never written to the report. Other
-flags: `--concurrency`, `--retries`, `--trials`, `--timeout`, `--min-pass-rate`,
-`--handoff-tool` (the tool name the `handoff` rule looks for) and `--out`; see
-`node bin/eval.js --help`. Exit codes: 0 gate passed, 1 gate failed, 2 usage or
-setup error.
-
-The same pieces are available as a library
-(`npm install github:Binarysite/agent-eval-harness`):
+Exit codes: 0 gate passed, 1 gate failed, 2 usage or setup error. Other flags
+(`--retries`, `--trials`, `--timeout`, `--min-pass-rate`, `--out`) are in
+`node bin/eval.js --help`. `examples/llm-agent/agent.js` is a Claude tool-use
+agent for the same shop. As a library (`npm install github:Binarysite/agent-eval-harness`):
 
 ```js
 import { loadScenarios, runSuite, summarize, createMockJudge } from 'agent-eval-harness';
-
-const results = await runSuite(await loadScenarios('scenarios.json'), {
-  agent, judge: createMockJudge(), concurrency: 4, retries: 1, timeoutMs: 10_000,
-});
-const summary = summarize(results, { minPassRate: 0.9 });
-if (!summary.gate.pass) process.exitCode = 1;
+const results = await runSuite(await loadScenarios('scenarios.json'), { agent, judge: createMockJudge() });
+if (!summarize(results, { minPassRate: 0.9 }).gate.pass) process.exitCode = 1;
 ```
 
-To write a judge for another provider, reuse `JUDGE_SYSTEM`, `buildJudgePrompt`
-and `parseVerdict`: send the prompt, parse the reply, return `{ pass, reason }`.
+`node bin/eval.js compare main.json branch.json` lists the cases that changed
+status and exits 1 if one that passed no longer does.
 
-## Layout
-
-```text
-bin/eval.js                 CLI
-src/expectations.js         rule checks and their accepted shapes
-src/scenarios.js            loading, validation, filters
-src/runner.js               retries, timeouts, bounded concurrency, judge call
-src/report.js               summary, critical gate, console and JSON output
-src/judges/mock.js          deterministic offline judge
-src/judges/llm.js           Anthropic and OpenAI-compatible judges over fetch
-src/http.js                 shared fetch call and key redaction for judges and example
-src/compare.js              case-by-case diff of two reports
-src/provenance.js           models, bank hash and git commit recorded in each report
-examples/sticker-shop/      rule-based agent, regressed agent, 24 scenarios
-examples/llm-agent/         Claude tool-use agent for the same scenarios
-test/                       node:test suite
-scripts/lint.mjs            dependency-free lint (syntax and whitespace)
-```
+How retries, the critical gate and the judge work, what this cannot catch, and
+the source layout: [docs/DESIGN.md](docs/DESIGN.md).
 
 ## License
 

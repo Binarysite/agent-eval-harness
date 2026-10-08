@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { join, extname } from 'node:path';
 
-const DIRS = ['bin', 'src', 'test', 'examples', 'scripts', '.github'];
+const DIRS = ['bin', 'src', 'test', 'examples', 'scripts', 'docs', '.github'];
 const TEXT = new Set(['.js', '.mjs', '.json', '.md', '.yml']);
 
 const walk = (dir) => readdirSync(dir, { withFileTypes: true })
