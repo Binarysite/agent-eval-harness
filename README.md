@@ -46,8 +46,8 @@ flowchart LR
   G --> P["Report<br/>JSON + exit code"]
 ```
 
-Extracted from the eval harness of a multi-tenant customer-service agent in a trial (294 scenarios, 65 critical); that bank, its prompts and data are private, and the sticker shop here is invented.
-Every failure found while testing that agent live before launch is turned into a regression case in the corpus (for example, unrecognised local-slang insults and a malformed business-name capture).
+Extracted from the eval harness of a multi-tenant customer-service agent now in a live pilot on demo sites, with no paying customer yet (294 scenarios, 65 critical); that bank, its prompts and data are private, and the sticker shop here is invented.
+Every failure found while testing that agent live is turned into a regression case in the corpus (for example, unrecognised local-slang insults and a malformed business-name capture).
 Built with Claude Code; the design decisions and reviews are mine.
 
 ## Writing scenarios
