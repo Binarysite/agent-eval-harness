@@ -10,11 +10,12 @@ import { checkExpectations } from './expectations.js';
  * The agent under test. It receives one user message and returns what it said
  * plus the tools it called. Everything else (model, prompt, tool execution) is
  * the agent's business, so the harness works with any stack.
+ * It never sees expect or rubric: an agent that can read the answers would
+ * grade itself.
  * Throw an Error with a numeric `status` for HTTP failures; 4xx other than 429 is
  * not retried. Set `retryable: false` on an error that would repeat (a refusal).
+ * A retry calls the agent again from scratch, tool calls included.
  * @callback Agent
- * It never sees the scenario's `expect` or `rubric`: an agent that can read the
- * answers would grade itself.
  * @param {{ message: string, context: Record<string, unknown>, signal: AbortSignal }} input
  * @returns {Promise<{ reply: string, toolCalls?: Array<{ name: string, args?: object } | string> }>}
  */

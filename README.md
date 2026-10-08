@@ -109,10 +109,12 @@ ANTHROPIC_API_KEY=... node bin/eval.js -s ./my-scenarios.json -a ./my-agent.js -
 Exit codes: 0 gate passed, 1 gate failed, 2 usage or setup error. Other flags
 (`--retries`, `--trials`, `--timeout`, `--min-pass-rate`, `--out`) are in
 `node bin/eval.js --help`. `examples/llm-agent/agent.js` is a Claude tool-use
-agent for the same shop. As a library (`npm install github:Binarysite/agent-eval-harness`):
+agent for the same shop. It is not published to npm (`"private": true`): clone it
+and run it from the repo (`npm test`, `npm run eval`, or `npx agent-eval -s ... -a ...`).
+As a library, import `src/index.js` from the clone:
 
 ```js
-import { loadScenarios, runSuite, summarize, createMockJudge } from 'agent-eval-harness';
+import { loadScenarios, runSuite, summarize, createMockJudge } from './agent-eval-harness/src/index.js';
 const results = await runSuite(await loadScenarios('scenarios.json'), { agent, judge: createMockJudge() });
 if (!summarize(results, { minPassRate: 0.9 }).gate.pass) process.exitCode = 1;
 ```

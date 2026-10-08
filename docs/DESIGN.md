@@ -42,6 +42,9 @@ HTTP failures, add `retryAfterMs` if the server sent `Retry-After`, and set
 `retryable: false` on an error that would repeat. A timed-out call is retried
 and billed again, so raise `--timeout` (default 10 s) for a real tool loop or an
 LLM judge.
+A retry reruns the whole case from the agent call on, every tool call in it
+included, and so does each of `--trials`. Tools with side effects (a refund, an
+email, a ticket) must be idempotent or mocks in the eval.
 
 **Trials measure flakiness instead of hiding it.** `--trials k` runs each case k
 times. Mixed results mark the case flaky in the summary; a critical case must
