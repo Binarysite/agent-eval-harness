@@ -33,5 +33,11 @@ jobs:
         with:
           name: eval-report-node${{ matrix.node }}
           path: reports/eval-report.json
-      # The regressed agent must trip the gate (exit 1); exit 2 would mean the run itself broke.
-      - run: npm run eval:regression || test $? -eq 1
+      # The regressed agent must trip the gate: exactly exit 1. Exit 0 means the gate
+      # missed the leak; exit 2 means the run itself broke.
+      - name: regression gate exits 1
+        run: |
+          set +e
+          npm run eval:regression
+          code=$?
+          test $code -eq 1
