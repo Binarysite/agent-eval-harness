@@ -70,6 +70,18 @@ bank's `scenariosSha256` and the `gitSha`, and `compare` warns when any of them
 differ, because a status change between two setups may come from the setup.
 Keys are read from the environment only and never written to the report.
 
+**The CI summary is append-only and leaves the replies out.** `--md` appends to the
+file because a job summary collects the output of several steps, and it lists only
+the first failed rule per case, with no replies and no judge reasons: on a public
+repository the page is public, and the JSON report already holds them. What remains
+is redacted, cut and escaped, since it can still carry words from the agent. A
+summary that cannot be written is a warning, never a different exit code.
+
+**The action runs the gate and nothing else.** It is a composite action with no
+install step, because there is nothing to install, and it does not upload the JSON
+report, since that holds every reply in full. Inputs reach the script through
+environment variables, never through its text, so a value cannot inject shell.
+
 **Zero runtime dependencies.** Node 22+, `node:test` for tests, `fetch` for the
 optional LLM judges. TypeScript is a dev dependency only. `npm run typecheck`
 checks, in non-strict mode, the JSDoc in `src` and `bin` and that the
