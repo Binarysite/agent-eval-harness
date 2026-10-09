@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -33,6 +33,17 @@ test('the action declares its inputs and keeps them out of the script text', () 
   assert.match(action, /judge:[\s\S]*?default: mock/);
   assert.match(action, /node-version:[\s\S]*?default: '22'/);
   assert.doesNotMatch(scriptOf(action), /\$\{\{/);
+});
+
+test('the action refuses a Node older than 22 with a message that names the input', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'agent-eval-'));
+  try {
+    await writeFile(join(dir, 'node'), '#!/bin/sh\ncase "$1" in -p) echo 20 ;; *) echo v20.11.0 ;; esac\n', { mode: 0o755 });
+    const env = { PATH: `${dir}:${process.env.PATH}`, GITHUB_ACTION_PATH: root, GITHUB_STEP_SUMMARY: join(dir, 's.md') };
+    await assert.rejects(run('bash', ['-c', scriptOf(action)], { cwd: root, env }), (err) => err.code === 2 && /node-version input must be 22/.test(err.stdout));
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });
 
 test('the action script runs the gate, appends the summary and passes the exit code through', async (t) => {
