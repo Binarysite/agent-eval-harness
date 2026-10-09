@@ -176,6 +176,8 @@ async function main() {
     `agent-eval-harness  ${scenarios.length} scenarios  agent ${args.agent}  judge ${args.judge}`
       + `  concurrency ${opts.concurrency}${opts.trials > 1 ? `  trials ${opts.trials}` : ''}\n`,
   );
+  // Create the folder up front, as for --out: a bad path then fails before a billed run, not after.
+  if (args.md) await mkdir(dirname(resolve(args.md)), { recursive: true });
   const started = Date.now();
   // A real agent can take minutes; show a counter, but only to a person at a terminal.
   let finished = 0;
@@ -204,7 +206,14 @@ async function main() {
   await writeFile(args.out, `${JSON.stringify(report, null, 2)}\n`);
   console.log(`Report: ${args.out}`);
   // Appended, never overwritten: a CI job summary collects the output of several steps.
-  if (args.md) await appendFile(args.md, `${formatMarkdown(report)}\n`);
+  // A summary that cannot be written must not turn a passed or failed gate into a setup error.
+  if (args.md) {
+    try {
+      await appendFile(args.md, `${formatMarkdown(report)}\n`);
+    } catch (err) {
+      console.error(`agent-eval: could not write the summary to ${args.md}: ${err.message}`);
+    }
+  }
   process.exitCode = summary.gate.pass ? 0 : 1;
 }
 

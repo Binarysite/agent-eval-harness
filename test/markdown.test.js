@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -114,6 +114,28 @@ test('--md appends to the file instead of overwriting it, and a failed gate stil
     assert.ok(text.startsWith('earlier step\n## agent-eval: PASS\n'));
     assert.equal(text.match(/^## agent-eval: /gm).length, 2);
     assert.ok(text.indexOf('agent-eval: PASS') < text.indexOf('agent-eval: FAIL'));
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('--md creates missing folders, and a summary that cannot be written keeps the gate exit code', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'agent-eval-'));
+  try {
+    const out = join(dir, 'report.json');
+    const nested = join(dir, 'new', 'deeper', 's.md');
+    await cli('-s', SCENARIOS, '-a', 'examples/sticker-shop/agent.js', '--md', nested, '--out', out);
+    assert.match(await readFile(nested, 'utf8'), /^## agent-eval: PASS\n/);
+
+    // A directory cannot be appended to: the gate still decides the exit code.
+    const asDir = join(dir, 'a-folder');
+    await mkdir(asDir);
+    const ok = await cli('-s', SCENARIOS, '-a', 'examples/sticker-shop/agent.js', '--md', asDir, '--out', out);
+    assert.match(ok.stderr, /could not write the summary/);
+    await assert.rejects(
+      cli('-s', SCENARIOS, '-a', 'examples/sticker-shop/regressed-agent.js', '--md', asDir, '--out', out),
+      (err) => err.code === 1 && /could not write the summary/.test(err.stderr),
+    );
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
