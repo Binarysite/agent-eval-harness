@@ -10,9 +10,12 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - `--md <file>` appends a Markdown summary of the run (gate, totals, the cases that did not
   pass with their first failed rule, and the run provenance) to a file, for example
-  `--md "$GITHUB_STEP_SUMMARY"`. Replies are left out of it.
+  `--md "$GITHUB_STEP_SUMMARY"`. Replies and the judge's reason are left out of it, and the
+  text that remains is redacted and escaped. A summary that cannot be written is a warning,
+  not a different exit code.
 - `action.yml`: a composite GitHub Action that runs the gate and writes that summary to the
-  job page. A CI job exercises it on every push.
+  job page. It takes multi-line `args`, refuses a Node older than 22 with a clear message, and
+  a CI job exercises it on every push.
 - `SECURITY.md`: supported versions, private reporting and where data goes.
 - `CONTRIBUTING.md`: the checks CI runs, the scope and how changes are made.
 - A bug report form for GitHub issues.
@@ -53,7 +56,11 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Rule checks (`tools`, `noTools`, `anyTool`, `handoff`, `toolArgs`, `includesAny`,
   `excludes`), scenario loading and validation, and an optional LLM judge (Anthropic and
   OpenAI-compatible, over `fetch`) next to a deterministic mock judge.
-- Critical-case gating: one critical failure fails the run whatever the pass rate.
+- Critical-case gating: one critical failure fails the run whatever the pass rate. A critical
+  case needs at least one deterministic rule, so one that passed on its rubric alone with the
+  mock judge or no judge fails the gate.
+- The agent receives only `{ message, context, signal }`, never the scenario's `expect` or
+  `rubric`.
 - `--trials k` runs each case k times and marks mixed results as flaky; a critical case must
   pass k of k.
 - Run provenance in every report: judge and agent models, the SHA-256 of the scenario bank and
@@ -61,15 +68,8 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Retries for infrastructure failures only, with exponential backoff, full jitter and
   `Retry-After`.
 - A sticker-shop example with a healthy agent, a regressed agent and 24 scenarios, a Claude
-  tool-use example agent, and CI with a dependency-free lint and `npm audit`.
-
-### Changed
-
-- A critical case needs at least one deterministic rule. A critical case that passed on its
-  rubric alone with the mock judge or no judge fails the gate.
-- The agent receives only `{ message, context, signal }`, never the scenario's `expect` or
-  `rubric`.
-- The regression step in CI requires exactly exit 1.
+  tool-use example agent, and CI with a dependency-free lint, `npm audit` and a regression step
+  that requires exactly exit 1.
 
 [Unreleased]: https://github.com/Binarysite/agent-eval-harness/compare/v0.2.0...HEAD
 [0.2.0]: https://github.com/Binarysite/agent-eval-harness/compare/v0.1.0...v0.2.0
