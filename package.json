@@ -1,6 +1,6 @@
 {
   "name": "agent-eval-harness",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A small, dependency-free harness for evaluating LLM conversational agents with rule checks, an optional LLM judge and critical-case gating.",
   "type": "module",
   "private": true,
