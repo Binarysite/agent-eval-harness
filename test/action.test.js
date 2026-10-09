@@ -79,3 +79,9 @@ test('the action script runs the gate, appends the summary and passes the exit c
   const text = await readFile(summary, 'utf8');
   assert.deepEqual(text.match(/^## agent-eval: \w+/gm), ['## agent-eval: PASS', '## agent-eval: PASS', '## agent-eval: FAIL']);
 });
+
+test('Dependabot watches only GitHub Actions, weekly', async () => {
+  const yml = await readFile(join(root, '.github/dependabot.yml'), 'utf8');
+  assert.deepEqual(yml.match(/package-ecosystem: [\w-]+/g), ['package-ecosystem: github-actions']);
+  assert.match(yml, /interval: weekly/);
+});
