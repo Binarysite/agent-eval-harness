@@ -71,8 +71,11 @@ differ, because a status change between two setups may come from the setup.
 Keys are read from the environment only and never written to the report.
 
 **Zero runtime dependencies.** Node 22+, `node:test` for tests, `fetch` for the
-optional LLM judges. TypeScript is a dev dependency only: it type-checks the
-JSDoc in `src` and `bin` and the declarations in `index.d.ts`.
+optional LLM judges. TypeScript is a dev dependency only. `npm run typecheck`
+checks, in non-strict mode, the JSDoc in `src` and `bin` and that the
+implementation matches the hand-written declarations in `index.d.ts`.
+`npm run typecheck:types` checks `index.d.ts` on its own with `--strict`.
+CI runs both.
 
 ## Known limits
 
@@ -99,6 +102,18 @@ JSDoc in `src` and `bin` and the declarations in `index.d.ts`.
   model conversations yet.
 - **Small banks give coarse rates.** With 24 cases, one case is 4.2 points.
   Look at which cases moved, not only the percentage.
+- **Tokens are recorded when the agent or judge reports them; no price table.**
+  Each case keeps the input and output tokens its agent and judge reported,
+  summed over trials, and the summary adds them up. The bundled judges and the
+  example agent read them from the API; your agent returns `usage`. An attempt
+  that ends in an error reports nothing, so retried calls are undercounted, and
+  cost is left to you. Spend is limited by running the judge only after the
+  rules pass, by `--critical` and `--category` runs, by the offline mock judge,
+  by the example agent's low effort and by `JUDGE_EFFORT`.
+- **Reports keep every reply.** Each result holds the agent's full reply and
+  tool calls. With a real agent and real data, treat the report as sensitive:
+  do not commit it or upload it as a public CI artifact. CI here uploads only
+  the report of the invented sticker shop.
 - **A timeout aborts the signal, it cannot stop your code.** An agent that
   ignores `signal` may keep running after the harness has moved on.
 
@@ -113,7 +128,7 @@ JSDoc in `src` and `bin` and the declarations in `index.d.ts`.
 
 ```text
 bin/eval.js                 CLI
-index.d.ts                  public type declarations (checked by npm run typecheck)
+index.d.ts                  hand-written public types (npm run typecheck and typecheck:types)
 src/expectations.js         rule checks and their accepted shapes
 src/scenarios.js            loading, validation, filters
 src/runner.js               retries, timeouts, bounded concurrency, judge call
@@ -126,5 +141,6 @@ src/provenance.js           models, bank hash and git commit recorded in each re
 examples/sticker-shop/      rule-based agent, regressed agent, 24 scenarios
 examples/llm-agent/         Claude tool-use agent for the same scenarios
 test/                       node:test suite
+test-types/conform.ts       fails the type check if index.d.ts and src/index.js disagree
 scripts/lint.mjs            dependency-free lint (syntax and whitespace)
 ```

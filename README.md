@@ -9,7 +9,7 @@
 and a run that fails if any critical case fails.**
 
 A suite at 95.8% passing can still ship the one reply that leaks another
-customer's order. Here the pass rate is not enough: one critical failure exits 1.
+customer's order. So the pass rate does not decide: one critical failure exits 1.
 
 Node 22+, no install, no API key. This runs a sticker-shop agent that has dropped its privacy check:
 
@@ -18,7 +18,8 @@ git clone https://github.com/Binarysite/agent-eval-harness.git && cd agent-eval-
 npm run eval:regression
 ```
 
-Real output, with the 23 `PASS` lines and the per-category table cut:
+Real output, trimmed: the header line, the 23 `PASS` lines, the per-category
+table and the report path are cut.
 
 ```text
 FAIL  privacy            prv-01  [critical]
@@ -35,6 +36,8 @@ Exit code 1. `examples/sticker-shop/regressed-agent.js` is the healthy agent wit
 its order ownership check switched off, the kind of guard a refactor drops by
 accident. 95.8% clears the 90% bar, so a pass rate alone would have shipped it.
 `npm run eval` runs the healthy agent against the same 24 scenarios and exits 0.
+Both sticker-shop agents are rule-based stand-ins and these runs use the mock
+judge, so no model is called: the point is the gate, not the agent.
 
 ```mermaid
 flowchart LR
@@ -46,9 +49,13 @@ flowchart LR
   G --> P["Report<br/>JSON + exit code"]
 ```
 
-Extracted from the eval harness of a multi-tenant customer-service agent now in a live pilot on demo sites, with no paying customer yet (294 scenarios, 65 critical); that bank, its prompts and data are private, and the sticker shop here is invented.
-Every failure found while testing that agent live is turned into a regression case in the corpus (for example, unrecognised local-slang insults and a malformed business-name capture).
+Extracted from the eval harness of a customer-service agent in a live pilot on demo sites, with no paying customer yet
+(294 scenarios, 65 critical, all private); the sticker shop here is invented.
 Built with Claude Code; the design decisions and reviews are mine.
+
+It does one job, not everything an eval platform does: there is no dashboard,
+hosted dataset or tracing. The job is turning a run into a CI exit code, with
+release blockers that a good average cannot hide.
 
 ## Writing scenarios
 
@@ -75,11 +82,12 @@ Built with Claude Code; the design decisions and reviews are mine.
 | `excludes: [..]` | the reply contains none of the phrases |
 
 `rubric` is plain language for the LLM judge, which only runs when every rule
-passed. `context` is passed to the agent untouched. Unknown rule names, an empty
-`expect` with no rubric and an empty string in a list rule all fail validation,
-so a typo cannot silently become "no check". A critical case needs at least one
-rule. Each case ends as `pass`, `fail` (a rule or the judge said no) or `error`
-(the agent threw or timed out, or the judge could not decide). While iterating,
+passed. `context` is passed to the agent untouched. Unknown field or rule
+names, an empty `expect` with no rubric and an empty string in a list rule all
+fail validation, so a typo cannot silently become "no check". A critical case
+needs at least one rule. Each case ends as `pass`, `fail` (a rule or the judge
+said no) or `error` (the agent threw or timed out, or the judge could not
+decide). While iterating,
 `npm run eval -- --category privacy -v` runs one category and prints every reply,
 and `--critical` runs only the release blockers.
 
@@ -95,6 +103,9 @@ export default async function agent({ message, context, signal }) {
 }
 ```
 
+If your model reports token counts, also return `usage: { inputTokens, outputTokens }`. The report keeps
+them per case and the summary adds them up, next to the judge's own tokens. There is no price table.
+
 ```bash
 ANTHROPIC_API_KEY=... node bin/eval.js -s ./my-scenarios.json -a ./my-agent.js --judge anthropic --timeout 60000
 ```
@@ -102,25 +113,58 @@ ANTHROPIC_API_KEY=... node bin/eval.js -s ./my-scenarios.json -a ./my-agent.js -
 | `--judge` | Environment |
 |---|---|
 | `mock` (default) | none; does not read the rubric |
-| `anthropic` | `ANTHROPIC_API_KEY`, optional `JUDGE_MODEL` (default `claude-sonnet-5-5`) |
+| `anthropic` | `ANTHROPIC_API_KEY`, optional `JUDGE_MODEL` (default `claude-sonnet-5-5`) and `JUDGE_EFFORT` (sent only when set) |
 | `openai` | `OPENAI_API_KEY`, `JUDGE_MODEL`, optional `OPENAI_BASE_URL` for any OpenAI-compatible endpoint |
 | `none` | rules only |
 
 Exit codes: 0 gate passed, 1 gate failed, 2 usage or setup error. Other flags
 (`--retries`, `--trials`, `--timeout`, `--min-pass-rate`, `--out`) are in
-`node bin/eval.js --help`. `examples/llm-agent/agent.js` is a Claude tool-use
-agent for the same shop. It is not published to npm (`"private": true`): clone it
-and run it from the repo (`npm test`, `npm run eval`, or `npx agent-eval -s ... -a ...`).
-As a library, import `src/index.js` from the clone:
+`node bin/eval.js --help`.
+
+`examples/llm-agent/agent.js` is a Claude tool-use agent for the same shop and
+scenarios. It calls the API, so it needs a key and is billed. It uses the
+judge's default model, `claude-sonnet-5-5`; set `AGENT_MODEL` to change it:
+
+```bash
+ANTHROPIC_API_KEY=... npm run eval -- -a examples/llm-agent/agent.js --judge anthropic --timeout 60000
+```
+
+The package is not on the npm registry (`"private": true` only blocks publishing).
+Install it from GitHub to get the `agent-eval` command and the library:
+
+```bash
+npm install github:Binarysite/agent-eval-harness
+npx agent-eval -s ./my-scenarios.json -a ./my-agent.js
+```
+
+JavaScript (ESM) with JSDoc; the public types in `index.d.ts` are hand-written and checked by tsc in CI.
 
 ```js
-import { loadScenarios, runSuite, summarize, createMockJudge } from './agent-eval-harness/src/index.js';
+import { loadScenarios, runSuite, summarize, createMockJudge } from 'agent-eval-harness';
 const results = await runSuite(await loadScenarios('scenarios.json'), { agent, judge: createMockJudge() });
 if (!summarize(results, { minPassRate: 0.9 }).gate.pass) process.exitCode = 1;
 ```
 
-`node bin/eval.js compare main.json branch.json` lists the cases that changed
-status and exits 1 if one that passed no longer does.
+To check a branch against main, write one report from each and compare them
+case by case (here the healthy agent stands in for main and the regressed one
+for the branch):
+
+```bash
+node bin/eval.js -s examples/sticker-shop/scenarios.json -a examples/sticker-shop/agent.js -o reports/main.json
+node bin/eval.js -s examples/sticker-shop/scenarios.json -a examples/sticker-shop/regressed-agent.js -o reports/branch.json
+node bin/eval.js compare reports/main.json reports/branch.json
+```
+
+```text
+pass    -> fail    prv-01  [critical]
+
+Pass rate 100.0% -> 95.8%  regressions 1
+```
+
+`compare` exits 1 when a case that passed before now fails, errors or is
+missing. A new case that fails is left to the gate of its own run. It warns
+when the runs differ in judge or agent model, scenario file, commit, filters
+or trials, since the setup may explain the change.
 
 How retries, the critical gate and the judge work, what this cannot catch, and
 the source layout: [docs/DESIGN.md](docs/DESIGN.md).
