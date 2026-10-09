@@ -58,7 +58,13 @@ test('the action script runs the gate, appends the summary and passes the exit c
   const report = JSON.parse(await readFile(join(dir, 'report.json'), 'utf8'));
   assert.deepEqual([report.meta.options.trials, report.summary.minPassRate], [2, 0.5]);
 
+  // A multi-line `args` block keeps every flag, not just the first line.
+  const multi = await bash(env('agent.js', { EVAL_ARGS: `--trials 2\n--min-pass-rate 0.99\n-o ${join(dir, 'multi.json')}` }));
+  assert.match(multi.stdout, /RESULT: PASS/);
+  const multiReport = JSON.parse(await readFile(join(dir, 'multi.json'), 'utf8'));
+  assert.deepEqual([multiReport.meta.options.trials, multiReport.summary.minPassRate], [2, 0.99]);
+
   await assert.rejects(bash(env('regressed-agent.js')), (err) => err.code === 1 && /RESULT: FAIL/.test(err.stdout));
   const text = await readFile(summary, 'utf8');
-  assert.deepEqual(text.match(/^## agent-eval: \w+/gm), ['## agent-eval: PASS', '## agent-eval: FAIL']);
+  assert.deepEqual(text.match(/^## agent-eval: \w+/gm), ['## agent-eval: PASS', '## agent-eval: PASS', '## agent-eval: FAIL']);
 });

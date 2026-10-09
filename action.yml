@@ -21,7 +21,7 @@ inputs:
     required: false
     default: ''
   args:
-    description: "Extra agent-eval flags, separated by spaces (no quoting), for example: --trials 3 --timeout 60000."
+    description: "Extra agent-eval flags, separated by spaces or new lines (no quoting), for example: --trials 3 --timeout 60000."
     required: false
     default: ''
   node-version:
@@ -49,6 +49,7 @@ runs:
         set -euo pipefail
         extra=()
         if [ -n "$EVAL_MIN_PASS_RATE" ]; then extra+=(--min-pass-rate "$EVAL_MIN_PASS_RATE"); fi
-        if [ -n "$EVAL_ARGS" ]; then read -r -a more <<< "$EVAL_ARGS"; extra+=("${more[@]}"); fi
+        # Split on any whitespace, newlines included, without expanding globs.
+        if [ -n "$EVAL_ARGS" ]; then set -f; more=($EVAL_ARGS); set +f; extra+=(${more[@]+"${more[@]}"}); fi
         node "$GITHUB_ACTION_PATH/bin/eval.js" -s "$EVAL_SCENARIOS" -a "$EVAL_AGENT" --judge "$EVAL_JUDGE" \
           ${extra[@]+"${extra[@]}"} --md "$GITHUB_STEP_SUMMARY"
