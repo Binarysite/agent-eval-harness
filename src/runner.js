@@ -4,6 +4,8 @@ import { checkExpectations } from './expectations.js';
 /**
  * @typedef {import('./scenarios.js').Scenario} Scenario
  * @typedef {import('./expectations.js').AgentOutput} AgentOutput
+ * @typedef {{ inputTokens: number, outputTokens: number }} Usage
+ * @typedef {{ agent?: Usage, judge?: Usage }} UsageByRole
  */
 
 /**
@@ -15,9 +17,10 @@ import { checkExpectations } from './expectations.js';
  * Throw an Error with a numeric `status` for HTTP failures; 4xx other than 429 is
  * not retried. Set `retryable: false` on an error that would repeat (a refusal).
  * A retry calls the agent again from scratch, tool calls included.
+ * Return `usage` when the model reports token counts; the report records them.
  * @callback Agent
  * @param {{ message: string, context: Record<string, unknown>, signal: AbortSignal }} input
- * @returns {Promise<{ reply: string, toolCalls?: Array<{ name: string, args?: object } | string> }>}
+ * @returns {Promise<{ reply: string, toolCalls?: Array<{ name: string, args?: object } | string>, usage?: Usage }>}
  */
 
 /**
@@ -25,9 +28,10 @@ import { checkExpectations } from './expectations.js';
  * `pass: null` means the judge could not decide (bad JSON, refusal, outage).
  * `graded: false` means it did not read the rubric (the mock judge); omitted means it did.
  * Throw an Error with a numeric `status` for HTTP failures; 4xx other than 429 is not retried.
+ * `usage`, when present, is moved from the verdict to the case result.
  * @callback Judge
  * @param {{ scenario: Scenario, output: AgentOutput, signal: AbortSignal }} input
- * @returns {Promise<{ pass: boolean | null, reason: string, graded?: boolean }>}
+ * @returns {Promise<{ pass: boolean | null, reason: string, graded?: boolean, usage?: Usage }>}
  */
 
 /**
@@ -43,6 +47,8 @@ import { checkExpectations } from './expectations.js';
  * @property {{ pass: boolean | null, reason: string, graded: boolean, attempts: number } | null} verdict
  *   `graded: false` when no judge read the rubric (mock judge, or no judge at all)
  * @property {string} [error]
+ * @property {UsageByRole} [usage]  tokens the agent and the judge reported, summed over trials;
+ *   absent when neither reported any
  * @property {{ run: number, passed: number }} [trials]  set by runSuite
  * @property {boolean} [flaky]  set by runSuite: the trials did not all end the same way
  */
@@ -141,6 +147,42 @@ export function normalizeOutput(raw) {
   return { reply: raw.reply, toolCalls };
 }
 
+/**
+ * Token counts are optional, but a malformed one is a broken contract, not a zero.
+ * @param {unknown} raw
+ * @param {string} who
+ * @returns {Usage | undefined}
+ */
+export function readUsage(raw, who) {
+  if (raw === undefined || raw === null) return undefined;
+  const count = (n) => Number.isInteger(n) && n >= 0;
+  const u = /** @type {any} */ (raw);
+  if (!count(u.inputTokens) || !count(u.outputTokens)) {
+    throw new Error(`${who} usage must be { inputTokens: number, outputTokens: number }`);
+  }
+  return { inputTokens: u.inputTokens, outputTokens: u.outputTokens };
+}
+
+/**
+ * Add up token counts per role. Returns undefined when nothing reported any,
+ * so a run without usage shows no token line at all.
+ * @param {Array<UsageByRole | undefined>} list
+ * @returns {UsageByRole | undefined}
+ */
+export function sumUsage(list) {
+  let total;
+  for (const usage of list) {
+    for (const role of /** @type {const} */ (['agent', 'judge'])) {
+      if (!usage?.[role]) continue;
+      total ??= {};
+      const t = (total[role] ??= { inputTokens: 0, outputTokens: 0 });
+      t.inputTokens += usage[role].inputTokens;
+      t.outputTokens += usage[role].outputTokens;
+    }
+  }
+  return total;
+}
+
 const NETWORK_CODES = new Set([
   'ECONNRESET', 'ECONNREFUSED', 'ECONNABORTED', 'ETIMEDOUT', 'ENOTFOUND', 'EAI_AGAIN', 'EPIPE', 'ENETUNREACH',
   'UND_ERR_SOCKET', 'UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_HEADERS_TIMEOUT', 'UND_ERR_BODY_TIMEOUT',
@@ -193,11 +235,21 @@ async function withRetries(fn, { retries, timeoutMs, retryDelayMs, label }) {
 
 const INVALID_VERDICT = 'judge returned an invalid verdict, expected { pass: boolean | null, reason: string }';
 
-/** A verdict that is not `{ pass: boolean | null }` becomes undecided, never a pass. */
+/**
+ * A verdict that is not `{ pass: boolean | null }` becomes undecided, never a pass.
+ * Its token usage is split off so the recorded verdict stays a verdict.
+ */
 function normalizeVerdict(raw) {
   const valid = raw !== null && typeof raw === 'object' && (typeof raw.pass === 'boolean' || raw.pass === null);
-  if (!valid) return { pass: null, reason: INVALID_VERDICT, graded: false };
-  return { ...raw, reason: String(raw.reason ?? ''), graded: raw.graded !== false };
+  if (!valid) return { verdict: { pass: null, reason: INVALID_VERDICT, graded: false } };
+  const { usage: rawUsage, ...rest } = raw;
+  let usage;
+  try {
+    usage = readUsage(rawUsage, 'judge');
+  } catch (err) {
+    return { verdict: { pass: null, reason: err.message, graded: false } };
+  }
+  return { verdict: { ...rest, reason: String(raw.reason ?? ''), graded: raw.graded !== false }, usage };
 }
 
 /** Recorded when a case has a rubric but the run has no judge. It never decides the status. */
@@ -209,11 +261,16 @@ async function judgeCase(judge, scenario, output, opts) {
     (signal) => judge({ scenario, output, signal }),
     { ...opts, label: 'judge' },
   );
-  const verdict = error
-    ? { pass: null, reason: `error: ${error.message}`, graded: false }
+  const { verdict, usage } = error
+    ? { verdict: { pass: null, reason: `error: ${error.message}`, graded: false }, usage: undefined }
     : normalizeVerdict(value);
-  return { ...verdict, attempts };
+  return { verdict: { ...verdict, attempts }, usage };
 }
+
+/** The `usage` field of a case result, or nothing when no one reported tokens. */
+const usageField = (agent, judge) => (agent || judge
+  ? { usage: { ...(agent && { agent }), ...(judge && { judge }) } }
+  : {});
 
 function caseStatus(rulesPass, verdict) {
   if (!rulesPass || verdict?.pass === false) return 'fail';
@@ -256,19 +313,23 @@ export async function runCase(
 
   let output;
   let checks;
+  let agentUsage;
   try {
     output = normalizeOutput(value);
+    agentUsage = readUsage(value.usage, 'agent');
     checks = checkExpectations(scenario.expect ?? {}, output, { handoffTool });
   } catch (err) {
     return done({ ...failed, error: err.message });
   }
 
   const rulesPass = checks.every((c) => c.pass);
-  const finish = (verdict, status) => done({ attempts, output, checks, verdict, status });
+  const finish = (verdict, status, judgeUsage = undefined) => done({
+    attempts, output, checks, verdict, status, ...usageField(agentUsage, judgeUsage),
+  });
   if (!rulesPass || !scenario.rubric) return finish(null, caseStatus(rulesPass, null));
   if (!judge) return finish({ ...NOT_GRADED }, 'pass');
-  const verdict = await judgeCase(judge, scenario, output, { retries, timeoutMs, retryDelayMs });
-  return finish(verdict, caseStatus(rulesPass, verdict));
+  const { verdict, usage } = await judgeCase(judge, scenario, output, { retries, timeoutMs, retryDelayMs });
+  return finish(verdict, caseStatus(rulesPass, verdict), usage);
 }
 
 /**
@@ -276,6 +337,7 @@ export async function runCase(
  * did not all end with the same status. A critical case passes only if every
  * trial passed; any other case needs a strict majority. The output, checks and
  * verdict shown are those of the first trial that agrees with the outcome.
+ * Durations and token usage add up over every trial, since every trial ran.
  * @param {CaseResult[]} runs
  * @returns {CaseResult}
  */
@@ -284,10 +346,12 @@ export function combineTrials(runs) {
   const passed = runs.filter((r) => r.status === 'pass').length;
   const needed = runs[0].critical ? runs.length : Math.floor(runs.length / 2) + 1;
   const pass = passed >= needed;
-  const shown = runs.find((r) => (r.status === 'pass') === pass);
+  const { usage: _shownUsage, ...shown } = runs.find((r) => (r.status === 'pass') === pass);
+  const usage = sumUsage(runs.map((r) => r.usage));
   return {
     ...shown,
     durationMs: runs.reduce((sum, r) => sum + r.durationMs, 0),
+    ...(usage && { usage }),
     trials: { run: runs.length, passed },
     flaky: new Set(runs.map((r) => r.status)).size > 1,
   };

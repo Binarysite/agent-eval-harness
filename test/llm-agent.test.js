@@ -90,6 +90,17 @@ test('exposes the model it calls, so the report can record it', async (t) => {
   assert.equal(bodies[0].model, 'agent-model-x');
 });
 
+test('sums the token usage of every turn', async (t) => {
+  const used = (body, input, output) => ({ ...body, usage: { input_tokens: input, output_tokens: output } });
+  mockAnthropic(
+    t,
+    used(toolUse('tu_1', 'lookup_order', { orderId: '10482' }), 500, 40),
+    used(answer('Order #10482 has shipped.'), 600, 15),
+  );
+  const out = await llmAgent({ message: 'Where is #10482?', context: { customerId: 'cus_A' } });
+  assert.deepEqual(out.usage, { inputTokens: 1100, outputTokens: 55 });
+});
+
 test('defaults to the same model as the Anthropic judge', (t) => {
   const saved = { agent: process.env.AGENT_MODEL, judge: process.env.JUDGE_MODEL };
   t.after(() => {

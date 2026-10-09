@@ -61,6 +61,25 @@ export function parseVerdict(text) {
 /** Default model of the Anthropic judge, also used by the example LLM agent. */
 export const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-5-5';
 
+/**
+ * Messages API usage in the harness shape. Cache writes and reads count as
+ * input: they are input tokens the request processed.
+ * @returns {import('../runner.js').Usage | undefined}
+ */
+export function anthropicUsage(u) {
+  if (!u) return undefined;
+  const input = (u.input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0);
+  return { inputTokens: input, outputTokens: u.output_tokens ?? 0 };
+}
+
+/** Chat Completions usage in the harness shape; some local servers send none. */
+const openAIUsage = (u) => (u
+  ? { inputTokens: u.prompt_tokens ?? 0, outputTokens: u.completion_tokens ?? 0 }
+  : undefined);
+
+/** Attach usage to a verdict only when the API reported it. */
+const withUsage = (verdict, usage) => (usage ? { ...verdict, usage } : verdict);
+
 /** The verdict JSON was cut off. Asking again would cut it off the same way. */
 const truncated = () => Object.assign(
   new Error('judge reply was cut off at the token limit; raise max_tokens or shorten the rubric'),
@@ -96,10 +115,11 @@ export function createAnthropicJudge({
       },
       { signal, apiKey },
     );
-    if (data.stop_reason === 'refusal') return { pass: null, reason: 'judge refused to grade' };
+    const usage = anthropicUsage(data.usage);
+    if (data.stop_reason === 'refusal') return withUsage({ pass: null, reason: 'judge refused to grade' }, usage);
     if (data.stop_reason === 'max_tokens') throw truncated();
     const text = (data.content ?? []).filter((b) => b.type === 'text').map((b) => b.text).join('');
-    return parseVerdict(text);
+    return withUsage(parseVerdict(text), usage);
   }, { model });
 }
 
@@ -131,6 +151,6 @@ export function createOpenAICompatibleJudge({
     );
     const choice = data.choices?.[0];
     if (choice?.finish_reason === 'length') throw truncated();
-    return parseVerdict(choice?.message?.content ?? '');
+    return withUsage(parseVerdict(choice?.message?.content ?? ''), openAIUsage(data.usage));
   }, { model });
 }

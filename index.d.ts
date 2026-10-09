@@ -14,6 +14,18 @@ export interface AgentOutput {
   toolCalls: ToolCall[];
 }
 
+/** Token counts one call reported. There is no price table, so no cost. */
+export interface Usage {
+  inputTokens: number;
+  outputTokens: number;
+}
+
+/** Tokens per role; a role that reported none is absent. */
+export interface UsageByRole {
+  agent?: Usage;
+  judge?: Usage;
+}
+
 /** Rule-based expectations of a scenario. Unknown keys fail validation. */
 export interface Expectations {
   tools?: string[];
@@ -52,10 +64,12 @@ export interface AgentInput {
  * Throw an Error with a numeric `status` for HTTP failures (429 and 5xx are
  * retried), `retryAfterMs` for Retry-After, and `retryable: false` on an error
  * that would repeat. A retry calls the agent again from scratch.
+ * Return `usage` when the model reports token counts.
  */
 export type Agent = ((input: AgentInput) => Promise<{
   reply: string;
   toolCalls?: Array<{ name: string; args?: object } | string>;
+  usage?: Usage;
 }>) & { model?: string };
 
 export interface Verdict {
@@ -64,6 +78,8 @@ export interface Verdict {
   reason: string;
   /** `false` when the rubric was not read (the mock judge); omitted means it was. */
   graded?: boolean;
+  /** Tokens the judge call used; moved to `CaseResult.usage.judge`. */
+  usage?: Usage;
 }
 
 export interface JudgeInput {
@@ -94,6 +110,8 @@ export interface CaseResult {
   /** Recorded verdict; `graded: false` when no judge read the rubric. */
   verdict: (Verdict & { graded: boolean; attempts: number }) | null;
   error?: string;
+  /** Tokens reported by the agent and the judge, summed over trials; absent when none were. */
+  usage?: UsageByRole;
   /** Set by runSuite. */
   trials?: { run: number; passed: number };
   /** Set by runSuite: the trials did not all end the same way. */
@@ -130,6 +148,8 @@ export interface Summary {
   critical: { total: number; passed: number; failures: string[] };
   byCategory: Record<string, { total: number; passed: number }>;
   flaky: string[];
+  /** Token totals; `null` when neither the agent nor the judge reported any. */
+  usage: UsageByRole | null;
   gate: { pass: boolean; reasons: string[] };
   warnings: string[];
 }

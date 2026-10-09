@@ -11,7 +11,7 @@
  */
 import { ORDERS, preflight } from '../sticker-shop/agent.js';
 import { postJSON } from '../../src/http.js';
-import { DEFAULT_ANTHROPIC_MODEL } from '../../src/judges/llm.js';
+import { DEFAULT_ANTHROPIC_MODEL, anthropicUsage } from '../../src/judges/llm.js';
 
 const MAX_TURNS = 6;
 const agentModel = () => process.env.AGENT_MODEL || DEFAULT_ANTHROPIC_MODEL;
@@ -112,6 +112,7 @@ export default async function llmAgent({ message, context, signal }) {
   const seller = context.role === 'seller';
   const messages = [{ role: 'user', content: message }];
   const toolCalls = [];
+  let usage; // summed over every turn, when the API reports it
 
   for (let turn = 0; turn < MAX_TURNS; turn += 1) {
     const data = await postJSON(
@@ -128,6 +129,12 @@ export default async function llmAgent({ message, context, signal }) {
       },
       { signal, apiKey },
     );
+    const turnUsage = anthropicUsage(data.usage);
+    if (turnUsage) {
+      usage ??= { inputTokens: 0, outputTokens: 0 };
+      usage.inputTokens += turnUsage.inputTokens;
+      usage.outputTokens += turnUsage.outputTokens;
+    }
     // Same prompt, same outcome: retrying a refusal or a cut-off only costs money.
     if (data.stop_reason === 'refusal') throw Object.assign(new Error('model refused to answer'), { retryable: false });
     if (data.stop_reason === 'max_tokens') {
@@ -139,7 +146,7 @@ export default async function llmAgent({ message, context, signal }) {
     const uses = data.content.filter((b) => b.type === 'tool_use');
     if (data.stop_reason !== 'tool_use' || !uses.length) {
       const reply = data.content.filter((b) => b.type === 'text').map((b) => b.text).join('').trim();
-      return { reply, toolCalls };
+      return { reply, toolCalls, ...(usage && { usage }) };
     }
     messages.push({
       role: 'user',

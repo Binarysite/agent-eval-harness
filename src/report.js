@@ -13,6 +13,8 @@
  * @typedef {ReturnType<typeof summarize>} Summary
  */
 
+import { sumUsage } from './runner.js';
+
 /** Overall pass rate a run needs when the caller does not say. */
 export const MIN_PASS_RATE = 0.9;
 
@@ -74,6 +76,8 @@ export function summarize(results, { minPassRate = MIN_PASS_RATE } = {}) {
     critical: { total: critical.length, passed: critical.length - criticalFailures.length, failures: criticalFailures },
     byCategory,
     flaky: results.filter((r) => r.flaky).map((r) => r.id),
+    // Token counts only; there is no price table, so no cost.
+    usage: sumUsage(results.map((r) => r.usage)) ?? null,
     gate: { pass: reasons.length === 0, reasons },
     warnings,
   };
@@ -82,6 +86,13 @@ export function summarize(results, { minPassRate = MIN_PASS_RATE } = {}) {
 /** Format a 0..1 ratio as a percentage with one decimal. */
 export function pct(x) {
   return `${(x * 100).toFixed(1)}%`;
+}
+
+/** "agent 1200 in, 300 out  judge 800 in, 40 out", for the roles that reported tokens. */
+function formatUsage(usage) {
+  return Object.entries(usage)
+    .map(([role, u]) => `${role} ${u.inputTokens} in, ${u.outputTokens} out`)
+    .join('  ');
 }
 
 const LABEL = { pass: 'PASS', fail: 'FAIL', error: 'ERR ' };
@@ -123,6 +134,7 @@ export function formatSummary(s) {
     '',
     `${totals}  pass rate ${pct(s.passRate)} (min ${pct(s.minPassRate)})`,
     `Critical ${s.critical.total}  passed ${s.critical.passed}`,
+    ...(s.usage ? [`Tokens ${formatUsage(s.usage)}`] : []),
     ...(s.flaky?.length ? [`Flaky ${s.flaky.length}: ${s.flaky.join(', ')}`] : []),
     ...s.warnings.map((w) => `WARNING: ${w}`),
     s.gate.pass ? 'RESULT: PASS' : `RESULT: FAIL\n${s.gate.reasons.map((r) => `  - ${r}`).join('\n')}`,

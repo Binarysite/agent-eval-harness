@@ -84,3 +84,20 @@ test('flaky cases are listed in the summary and tagged on their line', () => {
   assert.match(formatCase(flaky), /f1 {2}\[flaky 2\/3 passed\]/);
   assert.doesNotMatch(formatSummary(summarize([result('ok', 'pass')])), /Flaky/);
 });
+
+test('token totals appear only when someone reported usage', () => {
+  const plain = summarize([result('a', 'pass')]);
+  assert.equal(plain.usage, null);
+  assert.doesNotMatch(formatSummary(plain), /Tokens/);
+
+  const used = (agent, judge) => ({ ...result('u', 'pass'), usage: { agent, ...(judge && { judge }) } });
+  const s = summarize([
+    used({ inputTokens: 100, outputTokens: 20 }, { inputTokens: 50, outputTokens: 5 }),
+    used({ inputTokens: 300, outputTokens: 30 }),
+  ]);
+  assert.deepEqual(s.usage, {
+    agent: { inputTokens: 400, outputTokens: 50 },
+    judge: { inputTokens: 50, outputTokens: 5 },
+  });
+  assert.match(formatSummary(s), /\nTokens agent 400 in, 50 out {2}judge 50 in, 5 out\n/);
+});

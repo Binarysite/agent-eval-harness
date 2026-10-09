@@ -293,3 +293,30 @@ test('trials: mixed results mark a case flaky, and a critical case needs every t
   assert.deepEqual([steady.flaky, steady.trials], [false, { run: 1, passed: 1 }]);
   await assert.rejects(runSuite([scenario()], { agent: okAgent, trials: 0 }), /trials must be a positive integer/);
 });
+
+test('token usage from the agent and the judge is recorded per case and summed over trials', async () => {
+  const agent = async () => ({ reply: 'x', usage: { inputTokens: 100, outputTokens: 20 } });
+  const judge = async () => ({ pass: true, reason: 'ok', usage: { inputTokens: 50, outputTokens: 5 } });
+  const r = await runCase(scenario({ rubric: 'r' }), { agent, judge });
+  assert.deepEqual(r.usage, {
+    agent: { inputTokens: 100, outputTokens: 20 },
+    judge: { inputTokens: 50, outputTokens: 5 },
+  });
+  assert.equal('usage' in r.verdict, false, 'the verdict keeps only the verdict');
+
+  const [twice] = await runSuite([scenario()], { agent, trials: 2 });
+  assert.deepEqual(twice.usage, { agent: { inputTokens: 200, outputTokens: 40 } }, 'every trial was billed');
+  assert.equal('usage' in (await runCase(scenario(), { agent: okAgent })), false, 'no usage, no field');
+});
+
+test('malformed usage breaks the contract: an agent error, an undecided judge', async () => {
+  const bad = { inputTokens: '100', outputTokens: 20 };
+  const fromAgent = await runCase(scenario(), { agent: async () => ({ reply: 'x', usage: bad }) });
+  assert.equal(fromAgent.status, 'error');
+  assert.match(fromAgent.error, /agent usage must be/);
+  const fromJudge = await runCase(scenario({ rubric: 'r' }), {
+    agent: okAgent, judge: async () => ({ pass: true, reason: 'ok', usage: bad }),
+  });
+  assert.equal(fromJudge.status, 'error');
+  assert.match(fromJudge.verdict.reason, /judge usage must be/);
+});

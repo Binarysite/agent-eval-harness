@@ -102,6 +102,22 @@ test('Anthropic judge sends effort only when configured', async (t) => {
   assert.deepEqual(calls.map((c) => c.body.output_config), [{ effort: 'low' }, { effort: 'medium' }]);
 });
 
+test('judges pass on the token usage their API reports, cached input included', async (t) => {
+  mockFetch(
+    t,
+    anthropicText('{"pass": true, "reason": "ok"}', {
+      usage: { input_tokens: 10, cache_creation_input_tokens: 200, cache_read_input_tokens: 0, output_tokens: 7 },
+    }),
+    {
+      body: { choices: [{ message: { content: '{"pass": true}' } }], usage: { prompt_tokens: 30, completion_tokens: 4 } },
+    },
+  );
+  const anthropic = await createAnthropicJudge({ apiKey: KEY })({ scenario, output: output('x') });
+  assert.deepEqual(anthropic.usage, { inputTokens: 210, outputTokens: 7 });
+  const openai = await createOpenAICompatibleJudge({ apiKey: KEY, model: 'm' })({ scenario, output: output('x') });
+  assert.deepEqual(openai.usage, { inputTokens: 30, outputTokens: 4 });
+});
+
 test('Anthropic judge: refusal and unparseable text are undecided, HTTP errors carry the status', async (t) => {
   mockFetch(
     t,

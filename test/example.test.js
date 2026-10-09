@@ -4,7 +4,7 @@ import { execFile } from 'node:child_process';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import { loadScenarios, runSuite, summarize, createMockJudge } from '../src/index.js';
 import { RUN_DEFAULTS } from '../src/runner.js';
@@ -68,6 +68,26 @@ test('the report records paths relative to the working directory, never absolute
   await cli('-s', join(root, SCENARIOS), '-a', join(root, AGENT), '-c', 'privacy', '--out', out);
   const { meta } = JSON.parse(await readFile(out, 'utf8'));
   assert.deepEqual([meta.scenarios, meta.agent], [SCENARIOS, AGENT]);
+});
+
+test('CLI prints token totals only when the agent reports usage', async (t) => {
+  const dir = await tempDir(t);
+  const out = join(dir, 'report.json');
+  const plain = await cli('-s', SCENARIOS, '-a', AGENT, '-c', 'privacy', '--out', out);
+  assert.doesNotMatch(plain.stdout, /Tokens/);
+  assert.equal(JSON.parse(await readFile(out, 'utf8')).summary.usage, null);
+
+  const counting = join(dir, 'counting-agent.js');
+  await writeFile(counting, [
+    `import base from ${JSON.stringify(pathToFileURL(join(root, AGENT)).href)};`,
+    'export default async (input) => ({ ...(await base(input)), usage: { inputTokens: 10, outputTokens: 2 } });',
+    '',
+  ].join('\n'));
+  const { stdout } = await cli('-s', SCENARIOS, '-a', counting, '-c', 'privacy', '--out', out);
+  assert.match(stdout, /\nTokens agent 30 in, 6 out\n/);
+  const report = JSON.parse(await readFile(out, 'utf8'));
+  assert.deepEqual(report.summary.usage, { agent: { inputTokens: 30, outputTokens: 6 } });
+  assert.deepEqual(report.results[0].usage, { agent: { inputTokens: 10, outputTokens: 2 } });
 });
 
 test('CLI --help shows the library defaults', async () => {
