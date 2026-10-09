@@ -176,8 +176,12 @@ to install, and the exit code is the harness's, so a critical failure fails the 
 jobs:
   agent-eval:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
       - uses: Binarysite/agent-eval-harness@<sha> # v0.3.0
         with:
           scenarios: evals/scenarios.json
@@ -187,7 +191,10 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
 
-Pin the full commit SHA of a release, as above. `judge` defaults to `mock`.
+Pin the full commit SHA of a release, as above: replace `<sha>` with the commit
+that the release tag points to. `judge` defaults to `mock`. Secrets are not
+passed to workflows triggered by pull requests from forks, so a real judge fails
+there; use `judge: mock` or `none` for those runs.
 `min-pass-rate`, `args` (extra flags such as `--trials 3`, separated by spaces)
 and `node-version` (default 22) are optional. The JSON report is written to
 `reports/eval-report.json` in the workspace but is not uploaded, since it holds
