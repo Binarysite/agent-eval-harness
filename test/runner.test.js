@@ -167,7 +167,7 @@ test('an undecided or crashing judge marks the case as error', async () => {
   assert.equal(unsure.status, 'error');
   const crash = await runCase(s, { agent: okAgent, judge: async () => { throw http(429); }, retries: 0 });
   assert.equal(crash.status, 'error');
-  assert.match(crash.verdict.reason, /429/);
+  assert.equal(crash.verdict.reason, 'error: HTTP 429', 'formatCase adds the "judge:" prefix');
 });
 
 test('a judge that returns undefined is an error after one call, not an endless loop', async () => {

@@ -47,3 +47,19 @@ test('warns when the two runs used a different judge, agent, bank or commit', ()
   assert.deepEqual(compareReports(before, before).warnings, []);
   assert.deepEqual(compareReports(report(1), report(1)).warnings, [], 'reports without meta compare quietly');
 });
+
+test('warns when the two runs selected different cases or ran a different number of trials', () => {
+  const full = { categories: [], criticalOnly: false };
+  const before = { ...report(1, ['a', 'pass'], ['b', 'pass']), meta: { filters: full, options: { trials: 1 } } };
+  const after = {
+    ...report(1, ['a', 'pass']),
+    meta: { filters: { ...full, criticalOnly: true }, options: { trials: 3 } },
+  };
+  const c = compareReports(before, after);
+  assert.deepEqual(c.regressions.map((x) => x.id), ['b'], 'a case that disappeared still counts');
+  assert.deepEqual(c.warnings, [
+    'filters differ between the runs: {"categories":[],"criticalOnly":false} -> {"categories":[],"criticalOnly":true}',
+    'trials differ between the runs: 1 -> 3',
+  ]);
+  assert.deepEqual(compareReports(before, before).warnings, []);
+});

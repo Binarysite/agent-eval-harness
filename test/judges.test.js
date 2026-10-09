@@ -37,6 +37,12 @@ test('parseVerdict never turns garbage into a pass', () => {
   assert.equal(parseVerdict('{"pass": "yes"}').pass, null);
 });
 
+test('an unparseable verdict quotes what the judge said, cut to 80 characters', () => {
+  assert.match(parseVerdict('sure, looks fine!').reason, /^unparseable judge output: .+; judge said "sure, looks fine!"$/);
+  const long = parseVerdict(`<html>${'x'.repeat(200)}</html>`).reason;
+  assert.ok(long.endsWith(`judge said "<html>${'x'.repeat(74)}..."`), long);
+});
+
 test('judge prompt includes rubric, reply, tool calls and the critical flag', () => {
   const p = buildJudgePrompt(scenario, output('ok', [{ name: 'handoff_to_human', args: { reason: 'refund' } }]));
   assert.match(p, /Rubric: hand off/);
@@ -80,6 +86,20 @@ test('Anthropic judge sends the rubric and parses the verdict', async (t) => {
   assert.equal(req.body.model, 'judge-model');
   assert.equal(req.body.system, JUDGE_SYSTEM);
   assert.match(req.body.messages[0].content, /Rubric: hand off/);
+  assert.equal('output_config' in req.body, false, 'effort is opt-in');
+});
+
+test('Anthropic judge sends effort only when configured', async (t) => {
+  const calls = mockFetch(t, anthropicText('{"pass": true}'), anthropicText('{"pass": true}'));
+  const saved = process.env.JUDGE_EFFORT;
+  t.after(() => {
+    if (saved === undefined) delete process.env.JUDGE_EFFORT;
+    else process.env.JUDGE_EFFORT = saved;
+  });
+  await createAnthropicJudge({ apiKey: KEY, effort: 'low' })({ scenario, output: output('x') });
+  process.env.JUDGE_EFFORT = 'medium';
+  await createAnthropicJudge({ apiKey: KEY })({ scenario, output: output('x') });
+  assert.deepEqual(calls.map((c) => c.body.output_config), [{ effort: 'low' }, { effort: 'medium' }]);
 });
 
 test('Anthropic judge: refusal and unparseable text are undecided, HTTP errors carry the status', async (t) => {

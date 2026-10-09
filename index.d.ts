@@ -156,7 +156,7 @@ export interface StatusChange {
 
 export interface Comparison {
   changes: StatusChange[];
-  /** Changes whose previous status was `pass`. */
+  /** Changes whose previous status was `pass`, including `pass -> missing`. */
   regressions: StatusChange[];
   passRate: { before: number; after: number };
   warnings: string[];
@@ -208,8 +208,8 @@ export function compareReports(
 export function formatComparison(comparison: Comparison): string;
 
 export function createMockJudge(opts?: { maxChars?: number; banned?: string[] }): Judge;
-/** Env: ANTHROPIC_API_KEY (required), JUDGE_MODEL (optional). */
-export function createAnthropicJudge(opts?: { apiKey?: string; model?: string }): Judge;
+/** Env: ANTHROPIC_API_KEY (required), JUDGE_MODEL and JUDGE_EFFORT (optional; effort is sent only when set). */
+export function createAnthropicJudge(opts?: { apiKey?: string; model?: string; effort?: string }): Judge;
 /** Env: OPENAI_API_KEY and JUDGE_MODEL (required), OPENAI_BASE_URL (optional). */
 export function createOpenAICompatibleJudge(opts?: { apiKey?: string; baseUrl?: string; model?: string }): Judge;
 export function buildJudgePrompt(scenario: Scenario, output: AgentOutput): string;

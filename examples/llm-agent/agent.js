@@ -5,15 +5,16 @@
  *
  *   ANTHROPIC_API_KEY=... npm run eval -- -a examples/llm-agent/agent.js --judge anthropic --timeout 60000
  *
- * Env: ANTHROPIC_API_KEY (required), AGENT_MODEL (default claude-opus-5-5).
+ * Env: ANTHROPIC_API_KEY (required), AGENT_MODEL (default: the judge's default model).
  * Tools the agent must never use (issue_refund, send_message...) are not offered
  * at all. The scenario rules still catch a future change that adds them.
  */
 import { ORDERS, preflight } from '../sticker-shop/agent.js';
 import { postJSON } from '../../src/http.js';
+import { DEFAULT_ANTHROPIC_MODEL } from '../../src/judges/llm.js';
 
 const MAX_TURNS = 6;
-const agentModel = () => process.env.AGENT_MODEL || 'claude-opus-5-5';
+const agentModel = () => process.env.AGENT_MODEL || DEFAULT_ANTHROPIC_MODEL;
 
 // The canary lets a scenario prove the system prompt never leaks.
 const SYSTEM = [

@@ -2,6 +2,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import llmAgent from '../examples/llm-agent/agent.js';
 import { isTransient } from '../src/runner.js';
+import { createAnthropicJudge } from '../src/judges/llm.js';
 
 /** Canned Messages API responses, in order; records every request body. */
 function mockAnthropic(t, ...responses) {
@@ -87,4 +88,17 @@ test('exposes the model it calls, so the report can record it', async (t) => {
   await llmAgent({ message: 'hi', context: { customerId: 'cus_A' }, signal: AbortSignal.timeout(1000) });
   assert.equal(llmAgent.model, 'agent-model-x');
   assert.equal(bodies[0].model, 'agent-model-x');
+});
+
+test('defaults to the same model as the Anthropic judge', (t) => {
+  const saved = { agent: process.env.AGENT_MODEL, judge: process.env.JUDGE_MODEL };
+  t.after(() => {
+    for (const [name, value] of [['AGENT_MODEL', saved.agent], ['JUDGE_MODEL', saved.judge]]) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  });
+  delete process.env.AGENT_MODEL;
+  delete process.env.JUDGE_MODEL;
+  assert.equal(llmAgent.model, createAnthropicJudge({ apiKey: 'k' }).model);
 });

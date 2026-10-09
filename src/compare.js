@@ -4,6 +4,9 @@ import { PROVENANCE_KEYS } from './provenance.js';
 /**
  * Compare two JSON reports case by case. A raw diff of the files is noisy
  * (timestamps, durations); what matters is which cases changed status.
+ * A regression is a case that passed before and does not pass now, including
+ * one that is missing from the second report. A new case that fails is not a
+ * regression here: the gate of the run that produced it is what catches it.
  *
  * @typedef {{ id: string, status: string, critical: boolean }} ReportCase
  * @typedef {{ summary: { passRate: number }, results: ReportCase[] }} Report
@@ -37,6 +40,16 @@ export function compareReports(before, after, { beforeLabel = 'before', afterLab
   const meta = (report, key) => report.meta?.[key] ?? null;
   const warnings = PROVENANCE_KEYS.filter((key) => meta(before, key) !== meta(after, key))
     .map((key) => `${key} differs between the runs: ${meta(before, key)} -> ${meta(after, key)}`);
+  // A different selection turns every case left out into "pass -> missing".
+  const setup = {
+    filters: (report) => JSON.stringify(report.meta?.filters ?? null),
+    trials: (report) => report.meta?.options?.trials ?? null,
+  };
+  for (const [name, read] of Object.entries(setup)) {
+    if (read(before) !== read(after)) {
+      warnings.push(`${name} differ between the runs: ${read(before)} -> ${read(after)}`);
+    }
+  }
   return {
     changes,
     regressions: changes.filter((change) => change.from === 'pass'),

@@ -40,7 +40,7 @@ export function buildJudgePrompt(scenario, output) {
 /**
  * Parse the JSON from the first `{` to the last `}` of a model reply. Anything
  * unusable becomes `pass: null`, which the runner reports as an error instead
- * of a pass.
+ * of a pass, with the first 80 characters of the reply in the reason.
  * @param {string} text
  * @returns {{ pass: boolean | null, reason: string }}
  */
@@ -51,9 +51,15 @@ export function parseVerdict(text) {
     if (typeof parsed.pass !== 'boolean') throw new Error('"pass" is not a boolean');
     return { pass: parsed.pass, reason: String(parsed.reason ?? '') };
   } catch (err) {
-    return { pass: null, reason: `unparseable judge output: ${err.message}` };
+    // Quote the start of the reply: "Unexpected end of JSON input" alone says nothing.
+    const start = typeof text === 'string' && text.length > 80 ? `${text.slice(0, 80)}...` : text;
+    const said = typeof text === 'string' ? `; judge said ${JSON.stringify(start)}` : '';
+    return { pass: null, reason: `unparseable judge output: ${err.message}${said}` };
   }
 }
+
+/** Default model of the Anthropic judge, also used by the example LLM agent. */
+export const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-5-5';
 
 /** The verdict JSON was cut off. Asking again would cut it off the same way. */
 const truncated = () => Object.assign(
@@ -63,12 +69,16 @@ const truncated = () => Object.assign(
 
 /**
  * Anthropic Messages API judge.
- * Env: ANTHROPIC_API_KEY (required), JUDGE_MODEL (optional). The judge exposes `.model`.
+ * Env: ANTHROPIC_API_KEY (required), JUDGE_MODEL and JUDGE_EFFORT (optional).
+ * Effort is sent only when set, so a model that does not take it still works.
+ * The judge exposes `.model`.
+ * @param {{ apiKey?: string, model?: string, effort?: string }} [opts]
  * @returns {import('../runner.js').Judge}
  */
 export function createAnthropicJudge({
   apiKey = process.env.ANTHROPIC_API_KEY,
-  model = process.env.JUDGE_MODEL || 'claude-sonnet-5-5',
+  model = process.env.JUDGE_MODEL || DEFAULT_ANTHROPIC_MODEL,
+  effort = process.env.JUDGE_EFFORT || undefined,
 } = {}) {
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY is not set');
   return Object.assign(async function anthropicJudge({ scenario, output, signal }) {
@@ -78,6 +88,9 @@ export function createAnthropicJudge({
       {
         model,
         max_tokens: 2048,
+        // The verdict is one line of JSON, but thinking tokens count against max_tokens:
+        // on a thinking model, JUDGE_EFFORT=low keeps them from using up the budget first.
+        ...(effort && { output_config: { effort } }),
         system: JUDGE_SYSTEM,
         messages: [{ role: 'user', content: buildJudgePrompt(scenario, output) }],
       },

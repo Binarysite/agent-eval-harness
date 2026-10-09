@@ -65,7 +65,9 @@ import { checkExpectations } from './expectations.js';
  * command line cannot drift apart.
  * @type {Readonly<{ concurrency: number, trials: number, retries: number, timeoutMs: number, retryDelayMs: number }>}
  */
-export const RUN_DEFAULTS = Object.freeze({ concurrency: 4, trials: 1, retries: 1, timeoutMs: 10_000, retryDelayMs: 500 });
+export const RUN_DEFAULTS = Object.freeze({
+  concurrency: 4, trials: 1, retries: 1, timeoutMs: 10_000, retryDelayMs: 500,
+});
 
 // setTimeout fires at once for anything longer than this.
 const MAX_TIMEOUT_MS = 2_147_483_647;
@@ -208,7 +210,7 @@ async function judgeCase(judge, scenario, output, opts) {
     { ...opts, label: 'judge' },
   );
   const verdict = error
-    ? { pass: null, reason: `judge error: ${error.message}`, graded: false }
+    ? { pass: null, reason: `error: ${error.message}`, graded: false }
     : normalizeVerdict(value);
   return { ...verdict, attempts };
 }
