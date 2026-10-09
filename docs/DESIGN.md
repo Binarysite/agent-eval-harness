@@ -136,6 +136,7 @@ src/report.js               summary, critical gate, console and JSON output
 src/judges/mock.js          deterministic offline judge
 src/judges/llm.js           Anthropic and OpenAI-compatible judges over fetch
 src/http.js                 shared fetch call and key redaction for judges and example
+src/markdown.js             Markdown summary of a run, for a CI job page
 src/compare.js              case-by-case diff of two reports
 src/provenance.js           models, bank hash and git commit recorded in each report
 examples/sticker-shop/      rule-based agent, regressed agent, 24 scenarios

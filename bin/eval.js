@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
@@ -10,6 +10,7 @@ import {
   summarize,
   formatCase,
   formatSummary,
+  formatMarkdown,
   buildReport,
   createMockJudge,
   createAnthropicJudge,
@@ -50,6 +51,8 @@ const HELP = `Usage: agent-eval -s <scenarios.json> -a <agent.js> [options]
       --min-pass-rate <x>   overall pass rate required, 0..1 (default ${DEFAULTS.minPassRate})
       --handoff-tool <name> tool the "handoff" rule looks for (default ${DEFAULTS.handoffTool})
   -o, --out <file>          JSON report path (default ${DEFAULTS.out})
+      --md <file>           append a Markdown summary to this file, for example
+                            --md "$GITHUB_STEP_SUMMARY"
   -v, --verbose             print every reply and tool call
   -h, --help
 
@@ -129,6 +132,7 @@ async function main() {
       'min-pass-rate': { type: 'string', default: DEFAULTS.minPassRate },
       'handoff-tool': { type: 'string', default: DEFAULTS.handoffTool },
       out: { type: 'string', short: 'o', default: DEFAULTS.out },
+      md: { type: 'string' },
       verbose: { type: 'boolean', short: 'v', default: false },
       help: { type: 'boolean', short: 'h', default: false },
     },
@@ -199,6 +203,8 @@ async function main() {
   await mkdir(dirname(resolve(args.out)), { recursive: true });
   await writeFile(args.out, `${JSON.stringify(report, null, 2)}\n`);
   console.log(`Report: ${args.out}`);
+  // Appended, never overwritten: a CI job summary collects the output of several steps.
+  if (args.md) await appendFile(args.md, `${formatMarkdown(report)}\n`);
   process.exitCode = summary.gate.pass ? 0 : 1;
 }
 

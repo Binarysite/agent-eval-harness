@@ -219,6 +219,8 @@ export function summarize(results: CaseResult[], opts?: { minPassRate?: number }
 export function formatCase(result: CaseResult, opts?: { verbose?: boolean }): string;
 export function formatSummary(summary: Summary): string;
 export function buildReport(results: CaseResult[], summary: Summary, meta?: Record<string, unknown>): Report;
+/** Markdown summary of a run, for a CI job page. Replies are left out. */
+export function formatMarkdown(report: Report): string;
 
 export function compareReports(
   before: ComparableReport,

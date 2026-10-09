@@ -118,7 +118,7 @@ ANTHROPIC_API_KEY=... node bin/eval.js -s ./my-scenarios.json -a ./my-agent.js -
 | `none` | rules only |
 
 Exit codes: 0 gate passed, 1 gate failed, 2 usage or setup error. Other flags
-(`--retries`, `--trials`, `--timeout`, `--min-pass-rate`, `--out`) are in
+(`--retries`, `--trials`, `--timeout`, `--min-pass-rate`, `--out`, `--md`) are in
 `node bin/eval.js --help`.
 
 `examples/llm-agent/agent.js` is a Claude tool-use agent for the same shop and
