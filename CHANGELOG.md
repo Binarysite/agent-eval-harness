@@ -15,6 +15,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   job page. A CI job exercises it on every push.
 - `SECURITY.md`: supported versions, private reporting and where data goes.
 - `CONTRIBUTING.md`: the checks CI runs, the scope and how changes are made.
+- A bug report form for GitHub issues.
 
 ## [0.2.0] - 2026-10-09
 
