@@ -166,6 +166,33 @@ missing. A new case that fails is left to the gate of its own run. It warns
 when the runs differ in judge or agent model, scenario file, commit, filters
 or trials, since the setup may explain the change.
 
+## In GitHub Actions
+
+The repository is also a composite action. It sets up Node, runs the gate and
+appends a Markdown summary of the run (`--md`) to the job page. There is nothing
+to install, and the exit code is the harness's, so a critical failure fails the job.
+
+```yaml
+jobs:
+  agent-eval:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Binarysite/agent-eval-harness@<sha> # v0.3.0
+        with:
+          scenarios: evals/scenarios.json
+          agent: evals/agent.js
+          judge: anthropic
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+```
+
+Pin the full commit SHA of a release, as above. `judge` defaults to `mock`.
+`min-pass-rate`, `args` (extra flags such as `--trials 3`, separated by spaces)
+and `node-version` (default 22) are optional. The JSON report is written to
+`reports/eval-report.json` in the workspace but is not uploaded, since it holds
+every reply in full. Upload it yourself with `actions/upload-artifact` if you want it.
+
 How retries, the critical gate and the judge work, what this cannot catch, and
 the source layout: [docs/DESIGN.md](docs/DESIGN.md).
 

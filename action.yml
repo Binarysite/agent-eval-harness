@@ -1,0 +1,54 @@
+name: agent-eval-harness
+description: Release gate for LLM agents. Runs a scenario bank against your agent and fails the job if any critical case fails.
+author: Alfredo Rosadilla
+branding:
+  icon: shield
+  color: gray-dark
+
+inputs:
+  scenarios:
+    description: Path to the scenario bank (JSON), relative to the workspace.
+    required: true
+  agent:
+    description: Path to the module whose default export is the agent, relative to the workspace.
+    required: true
+  judge:
+    description: "Judge: mock, anthropic, openai or none. The real judges read their API key from the environment of the step."
+    required: false
+    default: mock
+  min-pass-rate:
+    description: Overall pass rate required, 0 to 1. Empty keeps the harness default.
+    required: false
+    default: ''
+  args:
+    description: "Extra agent-eval flags, separated by spaces (no quoting), for example: --trials 3 --timeout 60000."
+    required: false
+    default: ''
+  node-version:
+    description: Node.js version to run with (22 or newer).
+    required: false
+    default: '22'
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      with:
+        node-version: ${{ inputs.node-version }}
+    # Inputs go through the environment, never into the script text, so a value cannot inject shell.
+    # There is nothing to install: the harness has no runtime dependencies.
+    - name: Run the eval
+      shell: bash
+      env:
+        EVAL_SCENARIOS: ${{ inputs.scenarios }}
+        EVAL_AGENT: ${{ inputs.agent }}
+        EVAL_JUDGE: ${{ inputs.judge }}
+        EVAL_MIN_PASS_RATE: ${{ inputs.min-pass-rate }}
+        EVAL_ARGS: ${{ inputs.args }}
+      run: |
+        set -euo pipefail
+        extra=()
+        if [ -n "$EVAL_MIN_PASS_RATE" ]; then extra+=(--min-pass-rate "$EVAL_MIN_PASS_RATE"); fi
+        if [ -n "$EVAL_ARGS" ]; then read -r -a more <<< "$EVAL_ARGS"; extra+=("${more[@]}"); fi
+        node "$GITHUB_ACTION_PATH/bin/eval.js" -s "$EVAL_SCENARIOS" -a "$EVAL_AGENT" --judge "$EVAL_JUDGE" \
+          ${extra[@]+"${extra[@]}"} --md "$GITHUB_STEP_SUMMARY"
