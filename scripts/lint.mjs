@@ -9,7 +9,7 @@ const TEXT = new Set(['.js', '.mjs', '.json', '.md', '.yml']);
 
 const walk = (dir) => readdirSync(dir, { withFileTypes: true })
   .flatMap((e) => (e.isDirectory() ? walk(join(dir, e.name)) : [join(dir, e.name)]));
-const files = [...DIRS.filter(existsSync).flatMap(walk), 'README.md', 'package.json', 'action.yml']
+const files = [...DIRS.filter(existsSync).flatMap(walk), 'README.md', 'package.json', 'action.yml', 'CHANGELOG.md']
   .filter((f) => TEXT.has(extname(f)));
 
 const problems = [];
