@@ -34,10 +34,11 @@ your machine depends on the agent and the judge you choose:
 - **Reports** (`--out`, default `reports/eval-report.json`) keep every reply and tool call
   in full. Treat a report from a real agent as sensitive: do not commit it or upload it as a
   public artifact. `reports/` is in `.gitignore`.
-- **The Markdown summary** (`--md`) leaves out replies, but it quotes the first failed rule,
-  which can include a phrase from a reply, and the judge's one-sentence reason. On a public
-  repository the job summary is public, so keep real customer data out of scenarios you run
-  there.
+- **The Markdown summary** (`--md`) leaves out replies and the judge's reason. It does quote
+  the first failed rule of each failed case, and that text can carry words from the agent: an
+  error it threw, the arguments of a tool call, or the phrases your scenario forbids. Keys are
+  redacted and links, images and code are escaped, but the words stay. On a public repository
+  the job summary is public, so keep real customer data out of scenarios you run there.
 
 Scenario banks, agent modules and `args` are code and input you provide: the harness
 imports your agent module and runs it with your privileges, so run only agents you trust.
