@@ -13,6 +13,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `--md "$GITHUB_STEP_SUMMARY"`. Replies are left out of it.
 - `action.yml`: a composite GitHub Action that runs the gate and writes that summary to the
   job page. A CI job exercises it on every push.
+- `SECURITY.md`: supported versions, private reporting and where data goes.
 
 ## [0.2.0] - 2026-10-09
 
