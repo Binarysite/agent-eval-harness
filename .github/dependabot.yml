@@ -1,0 +1,10 @@
+version: 2
+updates:
+  # Actions are pinned by commit SHA with the version in a comment; Dependabot keeps both current.
+  # No npm entry: there are no runtime dependencies, and CI audits them with --omit=dev.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "ci"
