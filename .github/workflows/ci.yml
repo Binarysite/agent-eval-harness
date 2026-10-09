@@ -61,3 +61,17 @@ jobs:
         with:
           scenarios: examples/sticker-shop/scenarios.json
           agent: examples/sticker-shop/agent.js
+      # The regressed agent must fail the step. Each step has its own summary file, so the
+      # summary text itself is covered by test/action.test.js; this proves the exit code
+      # reaches the runner.
+      - uses: ./
+        id: regressed
+        continue-on-error: true
+        with:
+          scenarios: examples/sticker-shop/scenarios.json
+          agent: examples/sticker-shop/regressed-agent.js
+      - name: the action fails on the regressed agent
+        if: steps.regressed.outcome != 'failure'
+        run: |
+          echo "the action did not fail on the regressed agent"
+          exit 1
