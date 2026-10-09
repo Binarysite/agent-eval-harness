@@ -143,6 +143,9 @@ export function validateExpectation(key, value) {
   return rule.valid(value) ? null : `"${key}" must ${rule.expects}`;
 }
 
+/** The tool the `handoff` rule looks for when the caller does not name one. */
+export const HANDOFF_TOOL = 'handoff_to_human';
+
 /**
  * Run every rule declared in `expect` against one agent output.
  * @param {Record<string, unknown>} expect
@@ -150,7 +153,7 @@ export function validateExpectation(key, value) {
  * @param {{ handoffTool?: string }} [opts]
  * @returns {CheckResult[]}
  */
-export function checkExpectations(expect, output, { handoffTool = 'handoff_to_human' } = {}) {
+export function checkExpectations(expect, output, { handoffTool = HANDOFF_TOOL } = {}) {
   const called = output.toolCalls.map((c) => c.name);
   return Object.entries(expect).map(([key, value]) => {
     if (!Object.hasOwn(RULES, key)) return { rule: key, pass: false, detail: `unknown expectation "${key}"` };

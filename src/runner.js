@@ -60,6 +60,39 @@ import { checkExpectations } from './expectations.js';
  * @property {(r: CaseResult) => void} [onResult]
  */
 
+/**
+ * Defaults shared by runCase, runSuite and the CLI, so the library and the
+ * command line cannot drift apart.
+ * @type {Readonly<{ concurrency: number, trials: number, retries: number, timeoutMs: number, retryDelayMs: number }>}
+ */
+export const RUN_DEFAULTS = Object.freeze({ concurrency: 4, trials: 1, retries: 1, timeoutMs: 10_000, retryDelayMs: 500 });
+
+// setTimeout fires at once for anything longer than this.
+const MAX_TIMEOUT_MS = 2_147_483_647;
+
+/**
+ * Reject options that would make the run misbehave instead of fail: a NaN
+ * concurrency starts no worker, a NaN retry count retries forever.
+ * @param {string} fn
+ * @param {{ agent?: unknown, retries?: number, timeoutMs?: number, retryDelayMs?: number }} opts
+ */
+function assertCaseOptions(
+  fn,
+  {
+    agent,
+    retries = RUN_DEFAULTS.retries,
+    timeoutMs = RUN_DEFAULTS.timeoutMs,
+    retryDelayMs = RUN_DEFAULTS.retryDelayMs,
+  },
+) {
+  if (typeof agent !== 'function') throw new TypeError(`${fn} needs an agent function`);
+  if (!Number.isInteger(retries) || retries < 0) throw new RangeError('retries must be a non-negative integer');
+  if (!(timeoutMs > 0 && timeoutMs <= MAX_TIMEOUT_MS)) {
+    throw new RangeError(`timeoutMs must be a number above 0 and at most ${MAX_TIMEOUT_MS}`);
+  }
+  if (!(Number.isFinite(retryDelayMs) && retryDelayMs >= 0)) throw new RangeError('retryDelayMs must be a number >= 0');
+}
+
 /** Run `fn` with an AbortSignal and reject if it takes longer than `ms`. */
 export async function withTimeout(fn, ms, label = 'call') {
   const controller = new AbortController();
@@ -198,8 +231,16 @@ function caseStatus(rulesPass, verdict) {
  */
 export async function runCase(
   scenario,
-  { agent, judge, retries = 1, timeoutMs = 10_000, retryDelayMs = 500, handoffTool } = /** @type {any} */ ({}),
+  {
+    agent,
+    judge,
+    retries = RUN_DEFAULTS.retries,
+    timeoutMs = RUN_DEFAULTS.timeoutMs,
+    retryDelayMs = RUN_DEFAULTS.retryDelayMs,
+    handoffTool,
+  } = /** @type {any} */ ({}),
 ) {
+  assertCaseOptions('runCase', { agent, retries, timeoutMs, retryDelayMs });
   const started = performance.now();
   const base = { id: scenario.id, category: scenario.category, critical: scenario.critical === true };
   const done = (fields) => ({ ...base, ...fields, durationMs: Math.round(performance.now() - started) });
@@ -237,6 +278,7 @@ export async function runCase(
  * @returns {CaseResult}
  */
 export function combineTrials(runs) {
+  if (!runs.length) throw new RangeError('combineTrials needs at least one trial');
   const passed = runs.filter((r) => r.status === 'pass').length;
   const needed = runs[0].critical ? runs.length : Math.floor(runs.length / 2) + 1;
   const pass = passed >= needed;
@@ -255,9 +297,13 @@ export function combineTrials(runs) {
  * @param {RunOptions} opts
  * @returns {Promise<CaseResult[]>}
  */
-export async function runSuite(scenarios, { concurrency = 4, trials = 1, onResult, ...opts }) {
-  if (typeof opts.agent !== 'function') throw new TypeError('runSuite needs an agent function');
+export async function runSuite(
+  scenarios,
+  { concurrency = RUN_DEFAULTS.concurrency, trials = RUN_DEFAULTS.trials, onResult, ...opts },
+) {
+  assertCaseOptions('runSuite', opts);
   if (!Number.isInteger(trials) || trials < 1) throw new RangeError('trials must be a positive integer');
+  if (!Number.isInteger(concurrency) || concurrency < 1) throw new RangeError('concurrency must be a positive integer');
   return mapLimit(scenarios, concurrency, async (scenario) => {
     const runs = [];
     for (let i = 0; i < trials; i += 1) runs.push(await runCase(scenario, opts));

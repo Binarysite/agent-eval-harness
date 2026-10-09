@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
+import { dirname, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 import {
@@ -18,15 +18,19 @@ import {
   formatComparison,
   runProvenance,
 } from '../src/index.js';
+import { RUN_DEFAULTS } from '../src/runner.js';
+import { MIN_PASS_RATE } from '../src/report.js';
+import { HANDOFF_TOOL } from '../src/expectations.js';
 
+// parseArgs takes string defaults; the values come from the library.
 const DEFAULTS = {
   judge: 'mock',
-  concurrency: '4',
-  retries: '1',
-  trials: '1',
-  timeout: '10000',
-  minPassRate: '0.9',
-  handoffTool: 'handoff_to_human',
+  concurrency: String(RUN_DEFAULTS.concurrency),
+  retries: String(RUN_DEFAULTS.retries),
+  trials: String(RUN_DEFAULTS.trials),
+  timeout: String(RUN_DEFAULTS.timeoutMs),
+  minPassRate: String(MIN_PASS_RATE),
+  handoffTool: HANDOFF_TOOL,
   out: 'reports/eval-report.json',
 };
 
@@ -68,14 +72,42 @@ function toNumber(name, value, { min = 0, max = Infinity, integer = false } = {}
   return n;
 }
 
+async function readReport(file) {
+  const raw = await readFile(file, 'utf8');
+  try {
+    return JSON.parse(raw);
+  } catch (err) {
+    throw new Error(`${file}: invalid JSON: ${err.message}`);
+  }
+}
+
 async function runCompare(files) {
+  if (files.includes('-h') || files.includes('--help')) {
+    console.log(HELP);
+    return;
+  }
   if (files.length !== 2) {
     throw new Error('compare needs two report files: agent-eval compare <before.json> <after.json>');
   }
-  const [before, after] = await Promise.all(files.map(async (f) => JSON.parse(await readFile(f, 'utf8'))));
+  const [before, after] = await Promise.all(files.map(readReport));
   const result = compareReports(before, after, { beforeLabel: files[0], afterLabel: files[1] });
   console.log(formatComparison(result));
   process.exitCode = result.regressions.length ? 1 : 0;
+}
+
+/**
+ * parseArgs, with a pointer to --help on a bad flag.
+ * @template {import('node:util').ParseArgsConfig} T
+ * @param {T} config
+ * @returns {ReturnType<typeof parseArgs<T>>}
+ */
+function parseCli(config) {
+  try {
+    return parseArgs(config);
+  } catch (err) {
+    if (String(err.code).startsWith('ERR_PARSE_ARGS')) throw new Error(`${err.message} (see agent-eval --help)`);
+    throw err;
+  }
 }
 
 async function main() {
@@ -83,7 +115,7 @@ async function main() {
     await runCompare(process.argv.slice(3));
     return;
   }
-  const { values: args } = parseArgs({
+  const { values: args } = parseCli({
     options: {
       scenarios: { type: 'string', short: 's' },
       agent: { type: 'string', short: 'a' },
@@ -127,22 +159,37 @@ async function main() {
   const judge = JUDGES[args.judge]();
 
   const categories = args.category ? args.category.split(',').map((c) => c.trim()).filter(Boolean) : [];
-  const scenarios = filterScenarios(await loadScenarios(args.scenarios), { categories, criticalOnly: args.critical });
+  const bank = await loadScenarios(args.scenarios);
+  // A typo in --category is a usage error (exit 2), not a gate failure (exit 1).
+  const known = [...new Set(bank.map((s) => s.category))].sort();
+  const unknown = categories.filter((c) => !known.includes(c));
+  if (unknown.length) {
+    throw new Error(`unknown category "${unknown.join('", "')}" (categories: ${known.join(', ')})`);
+  }
+  const scenarios = filterScenarios(bank, { categories, criticalOnly: args.critical });
 
   console.log(
     `agent-eval-harness  ${scenarios.length} scenarios  agent ${args.agent}  judge ${args.judge}`
       + `  concurrency ${opts.concurrency}${opts.trials > 1 ? `  trials ${opts.trials}` : ''}\n`,
   );
   const started = Date.now();
-  const results = await runSuite(scenarios, { agent, judge, ...opts });
+  // A real agent can take minutes; show a counter, but only to a person at a terminal.
+  let finished = 0;
+  const progress = process.stderr.isTTY
+    ? () => process.stderr.write(`\r[${(finished += 1)}/${scenarios.length}]`)
+    : undefined;
+  const results = await runSuite(scenarios, { agent, judge, ...opts, onResult: progress });
+  if (progress) process.stderr.write('\r\x1b[K');
   for (const r of results) console.log(formatCase(r, { verbose: args.verbose }));
 
   const summary = summarize(results, { minPassRate });
   console.log(formatSummary(summary));
 
+  // Relative paths, so a shared report does not carry the local directory layout.
+  const shown = (file) => relative(process.cwd(), resolve(file));
   const report = buildReport(results, summary, {
-    agent: args.agent,
-    scenarios: args.scenarios,
+    agent: shown(args.agent),
+    scenarios: shown(args.scenarios),
     judge: args.judge,
     ...(await runProvenance({ agent, judge, scenariosFile: args.scenarios })),
     filters: { categories, criticalOnly: args.critical },

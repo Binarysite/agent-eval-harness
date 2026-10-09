@@ -13,12 +13,15 @@
  * @typedef {ReturnType<typeof summarize>} Summary
  */
 
+/** Overall pass rate a run needs when the caller does not say. */
+export const MIN_PASS_RATE = 0.9;
+
 /**
  * Totals, per-category counts, the gate decision and warnings for one run.
  * @param {CaseResult[]} results
  * @param {{ minPassRate?: number }} [opts]
  */
-export function summarize(results, { minPassRate = 0.9 } = {}) {
+export function summarize(results, { minPassRate = MIN_PASS_RATE } = {}) {
   const count = (list, status) => list.filter((r) => r.status === status).length;
   const critical = results.filter((r) => r.critical);
   const criticalFailures = critical.filter((r) => r.status !== 'pass').map((r) => r.id);

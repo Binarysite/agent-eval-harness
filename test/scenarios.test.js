@@ -96,3 +96,32 @@ test('list rules accept only non-empty strings', () => {
     assert.throws(() => validateScenarios(bank), message, `${key}: ${JSON.stringify(value)}`);
   }
 });
+
+test('a misspelled scenario field is an error, so "critcal" cannot demote a release blocker', () => {
+  const one = (fields) => [{ id: 'a', category: 'x', message: 'hi', expect: { anyTool: false }, ...fields }];
+  assert.throws(() => validateScenarios(one({ critcal: true })), /unknown field "critcal"/);
+  assert.throws(() => validateScenarios(one({ rubrik: 'r', expects: {} })), (err) => {
+    assert.match(err.message, /unknown field "rubrik"/);
+    assert.match(err.message, /unknown field "expects"/);
+    return true;
+  });
+});
+
+test('context must be an object and a rubric must have text', () => {
+  const one = (fields) => [{ id: 'a', category: 'x', message: 'hi', expect: { anyTool: false }, ...fields }];
+  for (const context of ['x', [1], null]) {
+    assert.throws(() => validateScenarios(one({ context })), /"context" must be an object/, JSON.stringify(context));
+  }
+  assert.throws(() => validateScenarios(one({ expect: undefined, rubric: '   ' })), /"rubric" must be a non-empty string/);
+});
+
+test('a file that is not a JSON array is named in the error', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'agent-eval-'));
+  const file = join(dir, 'object.json');
+  try {
+    await writeFile(file, '{ "id": "a" }');
+    await assert.rejects(loadScenarios(file), (err) => err.message === `${file}: must contain a JSON array of scenarios`);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});

@@ -7,6 +7,9 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { loadScenarios, runSuite, summarize, createMockJudge } from '../src/index.js';
+import { RUN_DEFAULTS } from '../src/runner.js';
+import { MIN_PASS_RATE } from '../src/report.js';
+import { HANDOFF_TOOL } from '../src/expectations.js';
 import agent from '../examples/sticker-shop/agent.js';
 import regressed from '../examples/sticker-shop/regressed-agent.js';
 
@@ -60,6 +63,26 @@ test('CLI exits 0 on a green run, 1 on a gate failure and writes the JSON report
   );
 });
 
+test('the report records paths relative to the working directory, never absolute ones', async (t) => {
+  const out = join(await tempDir(t), 'report.json');
+  await cli('-s', join(root, SCENARIOS), '-a', join(root, AGENT), '-c', 'privacy', '--out', out);
+  const { meta } = JSON.parse(await readFile(out, 'utf8'));
+  assert.deepEqual([meta.scenarios, meta.agent], [SCENARIOS, AGENT]);
+});
+
+test('CLI --help shows the library defaults', async () => {
+  const { stdout } = await cli('--help');
+  for (const [flag, value] of [
+    ['--concurrency', RUN_DEFAULTS.concurrency], ['--retries', RUN_DEFAULTS.retries],
+    ['--trials', RUN_DEFAULTS.trials], ['--timeout', RUN_DEFAULTS.timeoutMs],
+    ['--min-pass-rate', MIN_PASS_RATE], ['--handoff-tool', HANDOFF_TOOL],
+  ]) {
+    const line = stdout.split('\n').findIndex((l) => l.includes(flag));
+    const block = stdout.split('\n').slice(line, line + 2).join(' ');
+    assert.match(block, new RegExp(`\\(default ${value}\\)`), flag);
+  }
+});
+
 test('CLI setup errors exit 2', async (t) => {
   const noDefault = join(await tempDir(t), 'named-only.js');
   await writeFile(noDefault, 'export const agent = async () => ({ reply: "x" });\n');
@@ -69,6 +92,8 @@ test('CLI setup errors exit 2', async (t) => {
     [['-s', SCENARIOS, '-a', AGENT, '--retries', '1.5'], /--retries must be an integer/],
     [['-s', SCENARIOS, '-a', AGENT, '--trials', '0'], /--trials must be an integer between 1/],
     [['-s', SCENARIOS, '-a', AGENT, '--judge', 'nope'], /unknown judge "nope"/],
+    [['-s', SCENARIOS, '-a', AGENT, '--bogus'], /Unknown option '--bogus'.*\(see agent-eval --help\)/],
+    [['-s', SCENARIOS, '-a', AGENT, '-c', 'privacy,privcy'], /unknown category "privcy" \(categories: .*privacy/],
   ];
   for (const [args, message] of cases) {
     await assert.rejects(cli(...args), (err) => err.code === 2 && message.test(err.stderr), args.join(' '));
@@ -92,4 +117,13 @@ test('CLI filters by category, prints replies with -v and compares two reports',
   const same = await cli('compare', good, good);
   assert.match(same.stdout, /No case changed status/);
   await assert.rejects(cli('compare', good), (err) => err.code === 2);
+
+  const broken = join(dir, 'broken.json');
+  await writeFile(broken, '{ nope');
+  await assert.rejects(
+    cli('compare', good, broken),
+    (err) => err.code === 2 && err.stderr.includes(`${broken}: invalid JSON`),
+  );
+  const help = await cli('compare', '--help');
+  assert.match(help.stdout, /agent-eval compare <before\.json> <after\.json>/);
 });

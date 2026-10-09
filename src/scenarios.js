@@ -12,6 +12,8 @@ import { isObject, validateExpectation } from './expectations.js';
  * @property {string} [rubric]      Plain-language criteria for the LLM judge.
  */
 
+const FIELDS = new Set(['id', 'category', 'message', 'critical', 'context', 'expect', 'rubric']);
+
 /**
  * Problems with one scenario, each prefixed with `at`.
  * @param {Record<string, unknown>} s
@@ -20,11 +22,16 @@ import { isObject, validateExpectation } from './expectations.js';
  */
 function validateScenario(s, at) {
   const errors = [];
+  // A typo like "critcal" would otherwise turn a release blocker into an ordinary case.
+  for (const key of Object.keys(s)) if (!FIELDS.has(key)) errors.push(`unknown field "${key}"`);
   for (const field of ['id', 'category', 'message']) {
     if (typeof s[field] !== 'string' || !s[field].trim()) errors.push(`"${field}" must be a non-empty string`);
   }
   if (s.critical !== undefined && typeof s.critical !== 'boolean') errors.push('"critical" must be boolean');
-  if (s.rubric !== undefined && typeof s.rubric !== 'string') errors.push('"rubric" must be a string');
+  if (s.rubric !== undefined && (typeof s.rubric !== 'string' || !s.rubric.trim())) {
+    errors.push('"rubric" must be a non-empty string');
+  }
+  if (s.context !== undefined && !isObject(s.context)) errors.push('"context" must be an object');
   if (s.expect !== undefined && !isObject(s.expect)) errors.push('"expect" must be an object');
 
   const rules = isObject(s.expect) ? Object.entries(s.expect) : [];
@@ -40,8 +47,8 @@ function validateScenario(s, at) {
 
 /**
  * Validate a scenario bank. Collects every problem instead of stopping at the
- * first, so a broken bank is fixed in one pass. Unknown expectation keys are
- * errors: a typo like `exclude` must not silently turn into "no check".
+ * first, so a broken bank is fixed in one pass. Unknown fields and expectation
+ * keys are errors: a typo like `exclude` must not silently turn into "no check".
  * @param {unknown} bank
  * @returns {Scenario[]}
  */
@@ -78,7 +85,12 @@ export async function loadScenarios(file) {
   } catch (err) {
     throw new Error(`${file}: invalid JSON: ${err.message}`);
   }
-  return validateScenarios(bank);
+  if (!Array.isArray(bank)) throw new Error(`${file}: must contain a JSON array of scenarios`);
+  try {
+    return validateScenarios(bank);
+  } catch (err) {
+    throw new Error(`${file}: ${err.message}`);
+  }
 }
 
 /**

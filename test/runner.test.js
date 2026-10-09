@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { runCase, runSuite, normalizeOutput, isTransient, retryDelay } from '../src/runner.js';
+import { runCase, runSuite, combineTrials, normalizeOutput, isTransient, retryDelay } from '../src/runner.js';
 
 const scenario = (extra = {}) => ({ id: 's1', category: 'c', message: 'hi', expect: { anyTool: false }, ...extra });
 const okAgent = async () => ({ reply: 'hello', toolCalls: [] });
@@ -239,6 +239,28 @@ test('runSuite keeps input order and never exceeds the concurrency limit', async
 
 test('runSuite rejects a missing agent', async () => {
   await assert.rejects(runSuite([], {}), /needs an agent/);
+  await assert.rejects(runCase(scenario(), /** @type {any} */ ({})), /needs an agent/);
+});
+
+test('bad numeric options are rejected up front instead of running wrong', async () => {
+  const bad = [
+    [{ concurrency: NaN }, /concurrency must be a positive integer/],
+    [{ concurrency: 0 }, /concurrency must be a positive integer/],
+    [{ retries: NaN }, /retries must be a non-negative integer/],
+    [{ retries: -1 }, /retries must be a non-negative integer/],
+    [{ timeoutMs: 0 }, /timeoutMs must be/],
+    [{ timeoutMs: Infinity }, /timeoutMs must be/],
+    [{ retryDelayMs: -1 }, /retryDelayMs must be/],
+    [{ retryDelayMs: NaN }, /retryDelayMs must be/],
+  ];
+  for (const [opts, message] of bad) {
+    await assert.rejects(runSuite([scenario()], { agent: okAgent, ...opts }), message, JSON.stringify(opts));
+  }
+  await assert.rejects(runCase(scenario(), { agent: okAgent, retries: NaN }), /retries must be/);
+});
+
+test('combineTrials refuses an empty list', () => {
+  assert.throws(() => combineTrials([]), /at least one trial/);
 });
 
 test('verdicts say whether a judge read the rubric', async () => {
