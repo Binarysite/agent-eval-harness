@@ -1,11 +1,14 @@
+import { redactSecrets } from './http.js';
 import { pct } from './report.js';
 
 /**
  * A Markdown summary of one run, for a CI job page (`$GITHUB_STEP_SUMMARY`).
  * It restates the gate, lists the cases that did not pass with their first
  * failed rule, and records what makes two runs comparable (judge, model,
- * scenario bank hash, commit). Replies are not included: they can hold
- * customer data, and the JSON report already has them.
+ * scenario bank hash, commit). Replies and the judge's free-text reason are
+ * not included: they can hold customer data, and the JSON report has them.
+ * The text that remains can still carry words from the agent (an error it
+ * threw, tool arguments), so every cell is redacted, cut and escaped.
  *
  * @typedef {import('./report.js').Summary} Summary
  * @typedef {import('./runner.js').CaseResult} CaseResult
@@ -13,19 +16,23 @@ import { pct } from './report.js';
 
 const MAX_CELL = 240;
 
-/** Make free text safe inside a table cell: no pipes, no line breaks, no HTML, bounded length. */
+/**
+ * Make free text safe inside a table cell: no keys, no pipes, no line breaks, no HTML, no live
+ * links, images or code spans, bounded length. A backslash is escaped like the rest, so one
+ * at the end of the text cannot swallow the closing pipe.
+ */
 function cell(text) {
-  const flat = String(text).replace(/\s+/g, ' ').trim();
+  const flat = redactSecrets(String(text).replace(/\s+/g, ' ').trim());
   const cut = flat.length > MAX_CELL ? `${flat.slice(0, MAX_CELL - 3)}...` : flat;
-  return cut.replace(/\|/g, '\\|').replace(/</g, '&lt;');
+  return cut.replace(/[\\|[\]!`]/g, '\\$&').replace(/</g, '&lt;');
 }
 
-/** Why a case did not pass: the error, else the first failed rule, else the judge's reason. */
+/** Why a case did not pass: the error, else the first failed rule. The judge's reason stays in the JSON report. */
 function firstFailure(r) {
   if (r.error) return `error: ${r.error}`;
   const check = r.checks.find((c) => !c.pass);
   if (check) return `${check.rule}: ${check.detail}`;
-  if (r.verdict && r.verdict.pass !== true) return `judge: ${r.verdict.reason}`;
+  if (r.verdict && r.verdict.pass !== true) return 'judge: no passing verdict (reason in the JSON report)';
   return r.status;
 }
 

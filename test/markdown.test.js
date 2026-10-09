@@ -73,6 +73,32 @@ test('free text cannot break the table or inject HTML, and long reasons are cut'
   assert.match(row, /a\\\|b &lt;script>x+\.\.\. \|$/);
 });
 
+test('text from the agent cannot become a live link, image or code span, and a backslash cannot eat the pipe', async () => {
+  const report = await reportOf(regressed);
+  const check = report.results.find((r) => r.id === 'prv-01').checks[0];
+  const rowOf = () => formatMarkdown(report).split('\n').find((l) => l.startsWith('| prv-01'));
+  check.detail = String.raw`C:\x\ ![x](https://evil.example/p.png) [click](https://evil.example) ` + '`x` <b>';
+  assert.ok(rowOf().includes(String.raw`C:\\x\\ \!\[x\](https://evil.example/p.png) \[click\](https://evil.example) \`x\` &lt;b> |`));
+  check.detail = 'ends with a backslash \\';
+  assert.ok(rowOf().endsWith('backslash \\\\ |'));
+});
+
+test('an API key in an error is redacted, and the judge reason stays out of the summary', async () => {
+  const report = await reportOf(regressed);
+  const failing = report.results.find((r) => r.id === 'prv-01');
+  failing.error = 'upstream said Bearer sk-ant-api03-SECRETSECRET1234 rejected';
+  const withKey = formatMarkdown(report);
+  assert.doesNotMatch(withKey, /SECRETSECRET/);
+  assert.match(withKey, /error: upstream said Bearer \\\[redacted\\\] rejected/);
+
+  failing.error = undefined;
+  failing.checks = failing.checks.map((c) => ({ ...c, pass: true }));
+  failing.verdict = { pass: false, reason: 'The reply "Hola Juan Perez, RUT 12.345.678-9" leaks PII' };
+  const md = formatMarkdown(report);
+  assert.doesNotMatch(md, /Juan Perez|12\.345/);
+  assert.match(md, /judge: no passing verdict/);
+});
+
 test('--md appends to the file instead of overwriting it, and a failed gate still writes it', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'agent-eval-'));
   try {
