@@ -28,7 +28,8 @@
     "eval": "node bin/eval.js -s examples/sticker-shop/scenarios.json -a examples/sticker-shop/agent.js",
     "eval:regression": "node bin/eval.js -s examples/sticker-shop/scenarios.json -a examples/sticker-shop/regressed-agent.js",
     "lint": "node scripts/lint.mjs",
-    "typecheck": "tsc --noEmit --allowJs --checkJs"
+    "typecheck": "tsc --noEmit --allowJs --checkJs",
+    "typecheck:types": "tsc --strict --noEmit --ignoreConfig index.d.ts"
   },
   "engines": {
     "node": ">=22"

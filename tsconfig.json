@@ -10,5 +10,5 @@
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["src/**/*.js", "bin/**/*.js", "index.d.ts"]
+  "include": ["src/**/*.js", "bin/**/*.js", "index.d.ts", "test-types/*.ts"]
 }

@@ -1,5 +1,6 @@
 // Public contracts of agent-eval-harness (src/index.js).
-// The JSDoc in src/ is the source of truth; `npm run typecheck` checks both.
+// The JSDoc in src/ is the source of truth; `npm run typecheck` checks both and,
+// through test-types/conform.ts, that src/index.js provides what this file declares.
 
 /** A tool call as the harness records it. */
 export interface ToolCall {
