@@ -61,7 +61,7 @@ export function formatMarkdown({ meta = {}, summary: s, results }) {
   if (!s.gate.pass) {
     lines.push('The gate failed:', '', ...s.gate.reasons.map((r) => `- ${cell(r)}`), '');
   }
-  for (const w of s.warnings) lines.push(`> **Warning:** ${cell(w)}`, '');
+  for (const w of s.warnings ?? []) lines.push(`> **Warning:** ${cell(w)}`, '');
 
   const failing = results.filter((r) => r.status !== 'pass');
   if (failing.length) {

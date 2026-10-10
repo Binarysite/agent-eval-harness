@@ -83,6 +83,12 @@ test('text from the agent cannot become a live link, image or code span, and a b
   assert.ok(rowOf().endsWith('backslash \\\\ |'));
 });
 
+test('a report without warnings or flaky cases, built by hand or by an older version, still formats', async () => {
+  const report = await reportOf(regressed);
+  const { warnings, flaky, ...older } = report.summary;
+  assert.match(formatMarkdown({ ...report, summary: older }), /^## agent-eval: FAIL\n/);
+});
+
 test('a bare URL, www address or email from the agent is not autolinked', async () => {
   const report = await reportOf(regressed);
   report.results.find((r) => r.id === 'prv-01').error = 'visit https://evil.example/login, HTTP://x.example, www.evil.example or bob@evil.example';
