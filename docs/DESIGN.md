@@ -103,8 +103,9 @@ CI runs both.
   how often the judge agrees with a person grading the same replies. Until that
   exists, a judge pass rate is a signal to read, not a measured accuracy.
 - **There is no public run with a real judge.** CI and every output in the
-  README use the deterministic mock judge. `examples/llm-agent/agent.js` with
-  `--judge anthropic` works, but its results are not published here.
+  README use the deterministic mock judge. `examples/llm-agent/agent.js` and the
+  real judges are covered by tests with canned API responses; no real run is
+  published here.
 - **Substring rules are literal.** `excludes` catches "Riverton", not "a town by
   the river". That is why critical cases also carry a rubric. A real model will
   also fail some `includesAny` rules by phrasing a correct answer differently.
@@ -112,8 +113,8 @@ CI runs both.
   (empty reply, too long, "guarantee") so the pipeline runs offline. A mock
   pass means "nothing obviously wrong".
 - **Single turn per scenario.** Multi-turn flows can be tested by having your
-  agent function replay a scripted history, but the scenario format does not
-  model conversations yet.
+  agent function replay a scripted history (see `examples/starter`, scenario
+  `history-01`), but the scenario format does not model conversations yet.
 - **Small banks give coarse rates.** With 24 cases, one case is 4.2 points.
   Look at which cases moved, not only the percentage.
 - **Tokens are recorded when the agent or judge reports them; no price table.**
@@ -135,8 +136,8 @@ CI runs both.
 
 - Calibrate the judge against a set of human-labelled replies and report the
   agreement rate next to the pass rate.
-- Publish one run of the example LLM agent graded by a real judge.
-- Multi-turn scenarios.
+- A first-class conversation history in the scenario format (today it goes in
+  `context`, see `examples/starter`).
 
 ## Layout
 
@@ -155,6 +156,9 @@ src/compare.js              case-by-case diff of two reports
 src/provenance.js           models, bank hash and git commit recorded in each report
 examples/sticker-shop/      rule-based agent, regressed agent, 24 scenarios
 examples/llm-agent/         Claude tool-use agent for the same scenarios
+examples/starter/           three scenarios and an agent stub to start your own bank
+docs/SCENARIOS.md           how to write scenarios and rules
+docs/AGENTS-AND-JUDGES.md   agent contract, judges, flags, library API
 test/                       node:test suite
 test-types/conform.ts       fails the type check if index.d.ts and src/index.js disagree
 scripts/lint.mjs            dependency-free lint (syntax and whitespace)
