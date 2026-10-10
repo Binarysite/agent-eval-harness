@@ -12,6 +12,10 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   scenarios, with the report in `reports/real-judge-run/`: 23 of 24 verdicts matched the expected
   pass, 4849 tokens in and 673 out. The README limits section now cites it.
 
+### Security
+
+- Provider error bodies are no longer copied into thrown errors (they can echo a masked key).
+
 ## [0.3.1] - 2026-10-10
 
 ### Added

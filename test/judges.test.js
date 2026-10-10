@@ -130,7 +130,7 @@ test('Anthropic judge: refusal and unparseable text are undecided, HTTP errors c
   assert.equal((await judge({ scenario, output: output('x') })).pass, null);
   await assert.rejects(
     judge({ scenario, output: output('x') }),
-    (err) => err.status === 429 && /HTTP 429: rate limited/.test(err.message),
+    (err) => err.status === 429 && err.message === 'HTTP 429',
   );
 });
 
@@ -165,13 +165,26 @@ test('a 429 carries the Retry-After the server sent, in ms', async (t) => {
   assert.equal(await retryAfter(), undefined);
 });
 
-test('HTTP error messages never carry the key, raw or masked', async (t) => {
-  mockFetch(t, { status: 401, body: `Incorrect API key provided: ${KEY}. Also seen as sk-ab***yz.` });
+test('HTTP error messages never carry the body, the key or a masked key', async (t) => {
+  const echo = `Incorrect API key provided: ${KEY}. Also seen as sk-ab***yz.`;
+  mockFetch(
+    t,
+    { status: 401, body: { error: { type: 'authentication_error', message: echo } } },
+    { status: 401, body: echo },
+    { status: 400, body: { error: { type: 'sk-ab***yz', message: echo } } },
+  );
   const judge = createOpenAICompatibleJudge({ apiKey: KEY, model: 'm' });
-  await assert.rejects(judge({ scenario, output: output('x') }), (err) => {
-    assert.equal(err.message, 'HTTP 401: Incorrect API key provided: [redacted]. Also seen as [redacted].');
-    return err.status === 401;
-  });
+  const messages = [];
+  for (let i = 0; i < 3; i += 1) {
+    await judge({ scenario, output: output('x') }).catch((err) => messages.push([err.status, err.message]));
+  }
+  assert.deepEqual(messages, [
+    [401, 'HTTP 401: authentication_error'],
+    [401, 'HTTP 401'],
+    [400, 'HTTP 400'],
+  ]);
+  assert.ok(!JSON.stringify(messages).includes('sk-'));
+  assert.ok(!JSON.stringify(messages).includes(KEY));
 });
 
 test('OpenAI-compatible judge honours the base URL and handles errors', async (t) => {

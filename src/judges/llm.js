@@ -113,7 +113,7 @@ export function createAnthropicJudge({
         system: JUDGE_SYSTEM,
         messages: [{ role: 'user', content: buildJudgePrompt(scenario, output) }],
       },
-      { signal, apiKey },
+      { signal },
     );
     const usage = anthropicUsage(data.usage);
     if (data.stop_reason === 'refusal') return withUsage({ pass: null, reason: 'judge refused to grade' }, usage);
@@ -147,7 +147,7 @@ export function createOpenAICompatibleJudge({
           { role: 'user', content: buildJudgePrompt(scenario, output) },
         ],
       },
-      { signal, apiKey },
+      { signal },
     );
     const choice = data.choices?.[0];
     if (choice?.finish_reason === 'length') throw truncated();

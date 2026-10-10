@@ -17,6 +17,24 @@ export function redactSecrets(text, secrets = []) {
   return out.replace(/\bsk-[\w*-]+/g, '[redacted]');
 }
 
+/**
+ * The message of a non-2xx answer. A provider can echo a masked key in its error
+ * body, so the body is never copied: only the standard `error.type` survives
+ * (for example "rate_limit_error"), and only when it is a plain identifier.
+ * @param {number} status
+ * @param {string} raw
+ * @returns {string}
+ */
+export function errorLabel(status, raw) {
+  let type;
+  try {
+    type = JSON.parse(raw)?.error?.type;
+  } catch {
+    return `HTTP ${status}`;
+  }
+  return typeof type === 'string' && /^[a-z0-9_]{1,60}$/.test(type) ? `HTTP ${status}: ${type}` : `HTTP ${status}`;
+}
+
 /** Retry-After is either seconds or an HTTP date. */
 function parseRetryAfter(header) {
   if (!header) return undefined;
@@ -28,15 +46,15 @@ function parseRetryAfter(header) {
 /**
  * POST JSON and return the parsed reply. A non-2xx answer throws an Error
  * with `status`, so the runner retries 429 and 5xx but not a bad key or
- * request, and with `retryAfterMs` when the server sent Retry-After.
- * `apiKey` is scrubbed from the error message.
+ * request, and with `retryAfterMs` when the server sent Retry-After. The
+ * message is `errorLabel`: the body itself is never included.
  * @param {string} url
  * @param {Record<string, string>} headers
  * @param {unknown} body
- * @param {{ signal?: AbortSignal, apiKey?: string }} [opts]
+ * @param {{ signal?: AbortSignal }} [opts]
  * @returns {Promise<any>}
  */
-export async function postJSON(url, headers, body, { signal, apiKey } = {}) {
+export async function postJSON(url, headers, body, { signal } = {}) {
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'content-type': 'application/json', ...headers },
@@ -44,9 +62,9 @@ export async function postJSON(url, headers, body, { signal, apiKey } = {}) {
     signal,
   });
   if (!res.ok) {
-    const detail = redactSecrets(await res.text(), [apiKey]).slice(0, 200);
+    const raw = await res.text().catch(() => '');
     const retryAfterMs = parseRetryAfter(res.headers.get('retry-after'));
-    throw Object.assign(new Error(`HTTP ${res.status}: ${detail}`), { status: res.status, retryAfterMs });
+    throw Object.assign(new Error(errorLabel(res.status, raw)), { status: res.status, retryAfterMs });
   }
   return res.json();
 }

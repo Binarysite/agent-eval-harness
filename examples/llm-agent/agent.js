@@ -127,7 +127,7 @@ export default async function llmAgent({ message, context, signal }) {
         tools: seller ? SELLER_TOOLS : CUSTOMER_TOOLS,
         messages,
       },
-      { signal, apiKey },
+      { signal },
     );
     const turnUsage = anthropicUsage(data.usage);
     if (turnUsage) {

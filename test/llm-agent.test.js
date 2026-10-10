@@ -69,10 +69,10 @@ test('a refusal or a max_tokens cut-off is an error the runner does not retry', 
   }
 });
 
-test('an HTTP error keeps its status and drops the key', async (t) => {
+test('an HTTP error keeps its status and drops the body', async (t) => {
   t.mock.method(globalThis, 'fetch', async () => new Response('invalid x-api-key: test-key', { status: 401 }));
   await assert.rejects(llmAgent({ message: 'hi', context: {} }), (err) => {
-    assert.equal(err.message, 'HTTP 401: invalid x-api-key: [redacted]');
+    assert.equal(err.message, 'HTTP 401');
     return err.status === 401;
   });
 });
