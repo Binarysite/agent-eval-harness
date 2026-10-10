@@ -189,7 +189,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
-      - uses: Binarysite/agent-eval-harness@<sha> # v0.3.0
+      - uses: Binarysite/agent-eval-harness@6d64937edf19e953b8df944cef0bbeb3ae8061cb # v0.3.0
         with:
           scenarios: evals/scenarios.json
           agent: evals/agent.js
