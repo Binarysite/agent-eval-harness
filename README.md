@@ -229,6 +229,13 @@ This repo does one narrower thing: a JavaScript harness with zero runtime depend
 also usable as a composite action, that turns a run into an exit code where one failed
 critical case fails the run whatever the average.
 
+## Works with
+
+- [llm-cascade-router](https://github.com/Binarysite/llm-cascade-router#with-agent-eval-harness):
+  run with this harness, its example went from 20/24 to 24/24 once four messages were fixed.
+- [shell-guard-bench](https://github.com/Binarysite/shell-guard-bench#works-with): checks
+  the guard around an agent with a shell, with the same exit codes and critical-case rule.
+
 ## License
 
 MIT, see [LICENSE](LICENSE). What changed in each version is in the
