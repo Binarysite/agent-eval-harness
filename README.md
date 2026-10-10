@@ -210,6 +210,25 @@ every reply in full. Upload it yourself with `actions/upload-artifact` if you wa
 How retries, the critical gate and the judge work, what this cannot catch, and
 the source layout: [docs/DESIGN.md](docs/DESIGN.md).
 
+## Related work
+
+Mature tools cover far more ground than this one. As their READMEs described them on
+2026-10-09:
+
+- [promptfoo](https://github.com/promptfoo/promptfoo): a CLI and library for evaluating
+  and red-teaming LLM apps, with side-by-side model comparison, a web viewer and CI/CD
+  checks.
+- [Inspect](https://github.com/UKGovernmentBEIS/inspect_ai), from the UK AI Security
+  Institute: a Python framework for LLM evaluations with tool use, multi-turn dialog,
+  model-graded scoring and over 200 pre-built evaluations.
+- [DeepEval](https://github.com/confident-ai/deepeval): a Python framework, "similar to
+  Pytest but specialized for unit testing LLM apps", with ready-made metrics that include
+  agent ones such as task completion and tool correctness.
+
+This repo does one narrower thing: a JavaScript harness with zero runtime dependencies,
+also usable as a composite action, that turns a run into an exit code where one failed
+critical case fails the run whatever the average.
+
 ## License
 
 MIT, see [LICENSE](LICENSE).
