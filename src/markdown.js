@@ -17,7 +17,7 @@ import { pct } from './report.js';
 const MAX_CELL = 240;
 
 /**
- * Make free text safe inside a table cell: no keys, no pipes, no line breaks, no HTML, no live
+ * Make free text safe inside a table cell: no `sk-...` keys, no pipes, no line breaks, no HTML, no live
  * links, images or code spans, bounded length. A backslash is escaped like the rest, so one
  * at the end of the text cannot swallow the closing pipe.
  */
