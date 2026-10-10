@@ -89,16 +89,19 @@ test('a report without warnings or flaky cases, built by hand or by an older ver
   assert.match(formatMarkdown({ ...report, summary: older }), /^## agent-eval: FAIL\n/);
 });
 
-test('a bare URL, www address or email from the agent is not autolinked', async () => {
+test('a bare URL, www address, email or @mention from the agent is not autolinked', async () => {
   const report = await reportOf(regressed);
   report.results.find((r) => r.id === 'prv-01').error = 'visit https://evil.example/login, HTTP://x.example, www.evil.example or bob@evil.example';
   const row = formatMarkdown(report).split('\n').find((l) => l.startsWith('| prv-01'));
   // GitHub renders these as plain text: checked against its /markdown API in gfm mode.
-  assert.ok(row.includes(String.raw`visit https\://evil.example/login, HTTP\://x.example, www\.evil.example or bob` + '​@evil.example |'), row);
+  assert.ok(row.includes(String.raw`visit https\://evil.example/login, HTTP\://x.example, www\.evil.example or bob@` + '​evil.example |'), row);
   // GFM also autolinks right after '_', '*', '~' and '(', where a word boundary does not help.
   report.results.find((r) => r.id === 'prv-01').error = '_https://evil.example/a_ and _www.evil.example and _HTTP://b.example (www.c.example';
   const after = formatMarkdown(report).split('\n').find((l) => l.startsWith('| prv-01'));
   assert.ok(after.includes(String.raw`_https\://evil.example/a_ and _www\.evil.example and _HTTP\://b.example (www\.c.example |`), after);
+  // A zero-width space after '@' stops both the email and the mention of a user.
+  report.results.find((r) => r.id === 'prv-01').error = 'ping @octocat';
+  assert.ok(formatMarkdown(report).includes('ping @\u200boctocat |'));
 });
 
 test('an API key in an error is redacted, and the judge reason stays out of the summary', async () => {

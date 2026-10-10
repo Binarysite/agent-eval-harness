@@ -27,10 +27,10 @@ function cell(text) {
   return cut.replace(/[\\|[\]!`]/g, '\\$&').replace(/</g, '&lt;')
     // GFM autolinks bare URLs, www addresses and emails, also right after '_', '*', '~' or '(',
     // so no word boundary is required. An escaped colon or dot stops the first two; nothing
-    // escapes '@', so a zero-width space goes before it.
+    // escapes '@', so a zero-width space goes after it, which also stops @mentions.
     .replace(/(https?):/gi, '$1\\:')
     .replace(/www\./gi, 'www\\.')
-    .replace(/@/g, '\u200b@');
+    .replace(/@/g, '@\u200b');
 }
 
 /** Why a case did not pass: the error, else the first failed rule. The judge's reason stays in the JSON report. */
