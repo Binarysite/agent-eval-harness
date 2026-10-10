@@ -57,6 +57,13 @@ It does one job, not everything an eval platform does: there is no dashboard,
 hosted dataset or tracing. The job is turning a run into a CI exit code, with
 release blockers that a good average cannot hide.
 
+Limits worth knowing before you rely on it:
+
+- The LLM judge is not calibrated against human labels, so a judge pass rate is a
+  signal to read, not a measured accuracy.
+- There is no public run with a real judge: CI and every output here use the mock judge.
+- One turn per scenario. Multi-turn flows need your agent to replay a scripted history.
+
 ## Writing scenarios
 
 ```json
