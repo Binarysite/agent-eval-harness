@@ -133,13 +133,21 @@ test('--md appends to the file instead of overwriting it, and a failed gate stil
   }
 });
 
-test('--md creates missing folders, and a summary that cannot be written keeps the gate exit code', async () => {
+test('--md creates missing folders, a bad folder exits 2 before the run, and a failed append keeps the gate exit code', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'agent-eval-'));
   try {
     const out = join(dir, 'report.json');
     const nested = join(dir, 'new', 'deeper', 's.md');
     await cli('-s', SCENARIOS, '-a', 'examples/sticker-shop/agent.js', '--md', nested, '--out', out);
     assert.match(await readFile(nested, 'utf8'), /^## agent-eval: PASS\n/);
+
+    // A folder that cannot be created is a setup error, raised before any case runs.
+    const aFile = join(dir, 'a-file');
+    await writeFile(aFile, '');
+    await assert.rejects(
+      cli('-s', SCENARIOS, '-a', 'examples/sticker-shop/agent.js', '--md', join(aFile, 's.md'), '--out', out),
+      (err) => err.code === 2 && !/RESULT:/.test(err.stdout),
+    );
 
     // A directory cannot be appended to: the gate still decides the exit code.
     const asDir = join(dir, 'a-folder');
