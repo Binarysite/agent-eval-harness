@@ -231,4 +231,7 @@ critical case fails the run whatever the average.
 
 ## License
 
-MIT, see [LICENSE](LICENSE).
+MIT, see [LICENSE](LICENSE). What changed in each version is in the
+[changelog](CHANGELOG.md) and on the [releases page](https://github.com/Binarysite/agent-eval-harness/releases);
+how to report a vulnerability is in [SECURITY.md](SECURITY.md), and how to contribute in
+[CONTRIBUTING.md](CONTRIBUTING.md).
