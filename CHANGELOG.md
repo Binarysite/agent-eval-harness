@@ -13,7 +13,8 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `--md <file>` appends a Markdown summary of the run (gate, totals, the cases that did not
   pass with their first failed rule, and the run provenance) to a file, for example
   `--md "$GITHUB_STEP_SUMMARY"`. Replies and the judge's reason are left out of it, and the
-  text that remains is redacted and escaped. A `--md` path whose folder cannot be created
+  text that remains is redacted and escaped, so links, bare URLs, emails and @mentions from
+  the agent do not render live. A `--md` path whose folder cannot be created
   fails before the run (exit 2); a summary that cannot be appended after the run is a
   warning, not a different exit code.
 - `action.yml`: a composite GitHub Action that runs the gate and writes that summary to the
