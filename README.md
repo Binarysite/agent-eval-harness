@@ -45,14 +45,14 @@ shop here is invented. Built with Claude Code; the design decisions and reviews 
 
 ## Try it on your own agent
 
-Copy the starter (three scenarios and an agent stub) and run it from the v0.3.0 tag.
+Copy the starter (three scenarios and an agent stub) and run it from the v0.3.1 tag.
 The package is not on the npm registry, so `npx` installs it from GitHub:
 
 ```bash
 mkdir evals && cd evals
 curl -fsSLO https://raw.githubusercontent.com/Binarysite/agent-eval-harness/main/examples/starter/scenarios.json
 curl -fsSLO https://raw.githubusercontent.com/Binarysite/agent-eval-harness/main/examples/starter/agent.js
-npx -y github:Binarysite/agent-eval-harness#v0.3.0 -s scenarios.json -a agent.js
+npx -y github:Binarysite/agent-eval-harness#v0.3.1 -s scenarios.json -a agent.js
 ```
 
 It passes 3 of 3. Then replace the body of `agent.js` with a call to your agent. The
@@ -208,7 +208,7 @@ The other three rows describe those projects as their READMEs did on 2026-10-09.
 - **Small banks give coarse rates.** With 24 cases, one case is 4.2 points; read which
   cases moved, not only the percentage.
 - **Reports keep every reply in full.** Treat a report from a real agent as sensitive.
-- **Not on the npm registry.** Run it from a clone or with `npx github:Binarysite/agent-eval-harness#v0.3.0`.
+- **Not on the npm registry.** Run it from a clone or with `npx github:Binarysite/agent-eval-harness#v0.3.1`.
 
 ## Works with
 

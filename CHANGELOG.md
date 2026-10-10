@@ -6,6 +6,26 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-10
+
+### Added
+
+- `examples/starter`: a three-scenario bank and an agent stub to copy for your own agent,
+  covered by a test.
+- CI runs the tests with a coverage floor.
+
+### Changed
+
+- The README leads with the gate, and the reference material moved to `docs/SCENARIOS.md`
+  and `docs/AGENTS-AND-JUDGES.md`.
+- The README links the tools that work with the harness, and the action example is pinned to
+  the v0.3.0 commit.
+- The install examples now point at the v0.3.1 tag.
+
+### Tests
+
+- A test fails when the output blocks in the README drift from a real run.
+
 ## [0.3.0] - 2026-10-09
 
 ### Added
@@ -75,7 +95,8 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   tool-use example agent, and CI with a dependency-free lint, `npm audit` and a regression step
   that requires exactly exit 1.
 
-[Unreleased]: https://github.com/Binarysite/agent-eval-harness/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/Binarysite/agent-eval-harness/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/Binarysite/agent-eval-harness/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/Binarysite/agent-eval-harness/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Binarysite/agent-eval-harness/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Binarysite/agent-eval-harness/releases/tag/v0.1.0

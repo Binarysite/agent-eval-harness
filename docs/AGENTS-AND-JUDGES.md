@@ -38,9 +38,9 @@ judge's default model, `claude-sonnet-5-5`; set `AGENT_MODEL` to change it:
 ANTHROPIC_API_KEY=... npm run eval -- -a examples/llm-agent/agent.js --judge anthropic --timeout 60000
 ```
 
-CLI: `npx -y github:Binarysite/agent-eval-harness#v0.3.0 -s ... -a ...`. Library: import
+CLI: `npx -y github:Binarysite/agent-eval-harness#v0.3.1 -s ... -a ...`. Library: import
 from a clone (`./agent-eval-harness/src/index.js`) or pin the tag as a dev dependency,
-`"agent-eval-harness": "github:Binarysite/agent-eval-harness#v0.3.0"`. The package is
+`"agent-eval-harness": "github:Binarysite/agent-eval-harness#v0.3.1"`. The package is
 not on the npm registry (`"private": true` only blocks publishing).
 
 JavaScript (ESM) with JSDoc; the public types in `index.d.ts` are hand-written and checked by tsc in CI.
