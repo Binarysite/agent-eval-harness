@@ -24,7 +24,12 @@ const MAX_CELL = 240;
 function cell(text) {
   const flat = redactSecrets(String(text).replace(/\s+/g, ' ').trim());
   const cut = flat.length > MAX_CELL ? `${flat.slice(0, MAX_CELL - 3)}...` : flat;
-  return cut.replace(/[\\|[\]!`]/g, '\\$&').replace(/</g, '&lt;');
+  return cut.replace(/[\\|[\]!`]/g, '\\$&').replace(/</g, '&lt;')
+    // GFM autolinks bare URLs, www addresses and emails. An escaped colon or dot stops the
+    // first two; nothing escapes '@', so a zero-width space goes before it.
+    .replace(/\b(https?):/gi, '$1\\:')
+    .replace(/\bwww\./gi, 'www\\.')
+    .replace(/@/g, '\u200b@');
 }
 
 /** Why a case did not pass: the error, else the first failed rule. The judge's reason stays in the JSON report. */

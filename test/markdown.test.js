@@ -78,9 +78,17 @@ test('text from the agent cannot become a live link, image or code span, and a b
   const check = report.results.find((r) => r.id === 'prv-01').checks[0];
   const rowOf = () => formatMarkdown(report).split('\n').find((l) => l.startsWith('| prv-01'));
   check.detail = String.raw`C:\x\ ![x](https://evil.example/p.png) [click](https://evil.example) ` + '`x` <b>';
-  assert.ok(rowOf().includes(String.raw`C:\\x\\ \!\[x\](https://evil.example/p.png) \[click\](https://evil.example) \`x\` &lt;b> |`));
+  assert.ok(rowOf().includes(String.raw`C:\\x\\ \!\[x\](https\://evil.example/p.png) \[click\](https\://evil.example) \`x\` &lt;b> |`));
   check.detail = 'ends with a backslash \\';
   assert.ok(rowOf().endsWith('backslash \\\\ |'));
+});
+
+test('a bare URL, www address or email from the agent is not autolinked', async () => {
+  const report = await reportOf(regressed);
+  report.results.find((r) => r.id === 'prv-01').error = 'visit https://evil.example/login, HTTP://x.example, www.evil.example or bob@evil.example';
+  const row = formatMarkdown(report).split('\n').find((l) => l.startsWith('| prv-01'));
+  // GitHub renders these as plain text: checked against its /markdown API in gfm mode.
+  assert.ok(row.includes(String.raw`visit https\://evil.example/login, HTTP\://x.example, www\.evil.example or bob` + '​@evil.example |'), row);
 });
 
 test('an API key in an error is redacted, and the judge reason stays out of the summary', async () => {
