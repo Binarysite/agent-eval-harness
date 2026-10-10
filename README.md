@@ -197,9 +197,13 @@ The other three rows describe those projects as their READMEs did on 2026-10-09.
 
 ## Limits
 
-- **No public run with a real judge yet.** CI and every output here use the mock judge,
-  which does not read rubrics. The `anthropic` and `openai` judges are covered by tests
-  with canned API responses, not by a published run.
+- **One public run with a real judge, on one model.** On 2026-10-10 the `openai` judge with
+  `deepseek-chat` graded the 24 example scenarios for the healthy agent: 23 of 24 judge
+  verdicts matched the expected pass, the one miss being `sd-02`, where the judge objected
+  to an added "before Sunday night". 4849 tokens in, 673 out, under USD 0.01. See the
+  [report](reports/real-judge-run/2026-10-10-deepseek-chat.md). The `anthropic` judge has
+  not been run on a published sample; CI and the other outputs here use the mock judge,
+  which does not read rubrics.
 - **The judge is not calibrated against human labels**, so a judge pass rate is a signal
   to read, not a measured accuracy.
 - **One message per scenario.** There is no conversation format: a scripted history goes
