@@ -38,7 +38,7 @@ your machine depends on the agent and the judge you choose:
   the first failed rule of each failed case, and that text can carry words from the agent: an
   error it threw, the arguments of a tool call, or the phrases your scenario forbids. Strings
   shaped like `sk-...` are redacted, other key formats (Bearer tokens, GitHub or AWS keys) are
-  not, and links, bare URLs, emails, images and code are escaped so none renders live, but
+  not, and links, bare URLs, emails, @mentions, images and code are escaped so none renders live, but
   the words stay. On a public repository
   the job summary is public, so keep real customer data out of scenarios you run there.
 
