@@ -116,13 +116,16 @@ check keeps the code honest to it.
   nonsense. Read the failing verdicts before trusting a number, pin the judge
   model, and treat a judge or rubric change as an eval change, not a free
   improvement.
-- **The judge is not calibrated against human labels.** Nothing here measures
-  how often the judge agrees with a person grading the same replies. Until that
-  exists, a judge pass rate is a signal to read, not a measured accuracy.
-- **There is no public run with a real judge.** CI and every output in the
-  README use the deterministic mock judge. `examples/llm-agent/agent.js` and the
-  real judges are covered by tests with canned API responses; no real run is
-  published here.
+- **The judge is calibrated on one small labelled set.** `docs/CALIBRATION.md`
+  and `reports/calibration/` measure two DeepSeek judges against 48 labelled
+  replies (one labeller). With 25 bad and 23 good replies, every rate has a wide
+  interval, and a different bank or model needs its own calibration.
+- **The judge sees tool calls, not their results.** A reply that misquotes a
+  lookup ("arrives Monday" when the lookup said Thursday) passed both calibrated
+  judges 5 of 5 times. Only a rule that knows the right value catches that today.
+- **Real runs are few.** CI and every output in the README use the mock judge.
+  Published real runs: the 2026-10-10 judge run, the 2026-11-11 calibration and
+  the 2026-11-11 LLM-agent run, all on DeepSeek. No Anthropic run is published.
 - **Substring rules are literal.** `excludes` catches "Riverton", not "a town by
   the river". That is why critical cases also carry a rubric. A real model will
   also fail some `includesAny` rules by phrasing a correct answer differently.
@@ -157,8 +160,8 @@ check keeps the code honest to it.
 
 ## Roadmap
 
-- Calibrate the judge against a set of human-labelled replies and report the
-  agreement rate next to the pass rate.
+- Pass tool results to the judge, so it can check a reply against what a tool
+  returned (the blind spot the calibration found).
 - A first-class conversation history in the scenario format (today it goes in
   `context`, see `examples/starter`).
 
