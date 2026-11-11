@@ -69,6 +69,10 @@ export function summarize(results, { minPassRate = MIN_PASS_RATE } = {}) {
       `passed with no rule and no real judge (rubric-only with --judge mock or none): ${uncheckedOther.join(', ')}`,
     );
   }
+  // The mock judge (the CLI and action default) never reads a rubric, so without this a
+  // green run would not say that every rubric in it went unread.
+  const ungraded = results.filter((r) => r.verdict?.graded === false).length;
+  if (ungraded) warnings.push(`${ungraded} rubric(s) not graded: judge mock or none, or the judge failed`);
 
   return {
     total: results.length,

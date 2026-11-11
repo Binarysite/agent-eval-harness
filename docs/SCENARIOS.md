@@ -39,6 +39,12 @@ one check JSON Schema cannot express: unique ids.
 | `includesAny: [..]` | the reply contains at least one phrase (case-insensitive) |
 | `excludes: [..]` | the reply contains none of the phrases |
 
+`includesAny` and `excludes` compare what a reader sees: both the reply and the
+phrase go through NFKC (fullwidth letters become ASCII), lose every
+default-ignorable code point (zero-width characters, bidi marks and overrides,
+tag characters, variation selectors, soft hyphens, fillers), have every run of
+whitespace, line breaks included, folded to one space, and are lowercased.
+
 `rubric` is plain language for the LLM judge, which only runs when every rule
 passed. `context` is passed to the agent untouched. Unknown field or rule
 names, an empty `expect` with no rubric and an empty string in a list rule all

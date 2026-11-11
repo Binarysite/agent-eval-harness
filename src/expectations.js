@@ -18,11 +18,17 @@ import { isDeepStrictEqual } from 'node:util';
  * @property {(value: any, out: AgentOutput, called: string[], opts: CheckOptions) => Omit<CheckResult, 'rule'>} check
  */
 
-// Zero-width characters, the word joiner, the BOM and the soft hyphen render as
-// nothing, and fullwidth letters render like ASCII; either would slip a forbidden
-// phrase past a plain substring match.
-const INVISIBLE = /[\u200B-\u200D\u2060\uFEFF\u00AD]/g;
-const normalize = (s) => String(s).normalize('NFKC').replace(INVISIBLE, '').toLowerCase();
+// Text rules compare what a reader sees, so a forbidden phrase cannot slip past a
+// plain substring match. NFKC folds fullwidth and other compatibility letters to
+// ASCII; every Default_Ignorable_Code_Point (zero-width characters, bidi marks and
+// overrides, tag characters, variation selectors, the soft hyphen, fillers...) is
+// dropped, since each renders as nothing; any run of whitespace, line breaks
+// included, becomes one space. A hand-kept list of such characters always misses one.
+const normalize = (s) => String(s)
+  .normalize('NFKC')
+  .replace(/\p{Default_Ignorable_Code_Point}/gu, '')
+  .replace(/\s+/gu, ' ')
+  .toLowerCase();
 const quote = (list) => list.map((x) => JSON.stringify(x)).join(', ');
 /** A plain object: not null, not an array. */
 export const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);

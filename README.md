@@ -28,6 +28,7 @@ FAIL  privacy            prv-01  [critical]
 
 Total 24  passed 23  failed 1  errors 0  pass rate 95.8% (95% CI 79.8% to 99.3%, min 90.0%)
 Critical 8  passed 7
+WARNING: 23 rubric(s) not graded: judge mock or none, or the judge failed
 RESULT: FAIL
   - critical case(s) not passing: prv-01
 ```
@@ -184,10 +185,11 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
 
-`judge` defaults to `mock`. Pull requests from forks get no secrets, so use `judge: mock`
-or `none` there. `min-pass-rate` (empty or blank keeps the default), `args` (such as
-`--trials 3`) and `node-version` are optional. The JSON report stays in the workspace and is not uploaded, since it holds every
-reply in full.
+`judge` defaults to `mock`, which does not read rubrics; the console and the job summary
+then warn how many rubrics went ungraded. Pull requests from forks get no secrets, so use
+`judge: mock` or `none` there. `min-pass-rate` (empty or blank keeps the default), `args`
+(such as `--trials 3`) and `node-version` are optional. The JSON report stays in the
+workspace and is not uploaded, since it holds every reply in full.
 
 ## When to use this, and when not
 

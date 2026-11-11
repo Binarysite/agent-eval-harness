@@ -69,3 +69,25 @@ test('text rules see through zero-width characters, soft hyphens and fullwidth l
   // The phrase is normalized too, so a fullwidth phrase matches a plain reply.
   assert.deepEqual(failing(checkExpectations({ excludes: ['Ｒiverton'] }, out('shipping to Riverton'))), ['excludes']);
 });
+
+test('text rules ignore every default-ignorable character and fold whitespace', () => {
+  const cases = {
+    'left-to-right mark U+200E': 'in pro‎duction',
+    'right-to-left override U+202E': 'in pro‮duction',
+    'tag characters U+E0070 U+E0072': 'in pro\u{E0070}\u{E0072}duction',
+    'combining grapheme joiner U+034F': 'in pro͏duction',
+    'variation selector-16 U+FE0F': 'in pro️duction',
+    'Mongolian vowel separator U+180E': 'in pro᠎duction',
+    'invisible times U+2062': 'in pro⁢duction',
+    'Hangul filler U+3164': 'in proㅤduction',
+    'a line break': 'in\nproduction',
+    'a double space': 'in  production',
+    'a no-break space and a tab': 'in \tproduction',
+  };
+  for (const [name, reply] of Object.entries(cases)) {
+    assert.deepEqual(failing(checkExpectations({ excludes: ['in production'] }, out(`Order is ${reply}`))), ['excludes'], name);
+    assert.deepEqual(failing(checkExpectations({ includesAny: ['in production'] }, out(`Order is ${reply}`))), [], name);
+  }
+  // The phrase is folded the same way, so a phrase with a line break matches a plain reply.
+  assert.deepEqual(failing(checkExpectations({ excludes: ['in\nproduction'] }, out('Order is in production'))), ['excludes']);
+});

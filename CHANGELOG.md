@@ -21,6 +21,13 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   exited 0 without a report. A blank path, or a file that cannot be opened for writing, now
   fails before the run for both `--out` and `--md` (exit 2); the check leaves no empty file
   behind. A report that cannot be written after the run now exits 2 instead of 0 or 1.
+- `excludes` and `includesAny` missed phrases split by invisible characters outside a short
+  hand-kept list (a left-to-right mark, a bidi override, tag characters, U+034F, U+FE0F,
+  U+180E, U+2062, U+3164) or by a line break or a double space. Both sides now drop every
+  `Default_Ignorable_Code_Point` after NFKC and fold any run of whitespace to one space.
+- With `--judge mock` (the CLI and action default) every rubric went ungraded without a word
+  before `RESULT: PASS`. The console and the Markdown summary now warn, for example
+  `23 rubric(s) not graded: judge mock or none, or the judge failed`.
 
 ## [0.4.0] - 2026-11-11
 
