@@ -82,10 +82,13 @@ Keys are read from the environment only and never written to the report.
 file because a job summary collects the output of several steps, and it lists only
 the first failed rule per case, with no replies and no judge reasons: on a public
 repository the page is public, and the JSON report already holds them. What remains
-is redacted, cut and escaped, since it can still carry words from the agent. A
-folder that cannot be created fails before the run (exit 2), so a bad path costs no
-billed calls; a summary that cannot be appended after the run is a warning, never a
-different exit code.
+is redacted, cut and escaped, since it can still carry words from the agent.
+
+**Output paths are checked before the first call.** For both `--out` and `--md`, a
+folder that cannot be created, or an `--out` path that is a folder, fails before the
+run (exit 2), so a bad path costs no billed calls. Once the run is over the gate has
+decided: a report or summary that still cannot be written is an error message, never
+a different exit code.
 
 **The action runs the gate and nothing else.** It is a composite action with no
 install step, because there is nothing to install, and it does not upload the JSON

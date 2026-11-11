@@ -147,3 +147,20 @@ test('CLI filters by category, prints replies with -v and compares two reports',
   const help = await cli('compare', '--help');
   assert.match(help.stdout, /agent-eval compare <before\.json> <after\.json>/);
 });
+
+test('a bad --out path exits 2 before the run, with zero agent calls', async (t) => {
+  const dir = await tempDir(t);
+  const calls = join(dir, 'calls.log');
+  const counting = join(dir, 'counting-agent.mjs');
+  await writeFile(counting, [
+    "import { appendFileSync } from 'node:fs';",
+    `export default async function agent() { appendFileSync(${JSON.stringify(calls)}, 'call\\n'); return { reply: 'x' }; }`,
+    '',
+  ].join('\n'));
+  const aFile = join(dir, 'a-file');
+  await writeFile(aFile, 'not a folder');
+  for (const out of [join(aFile, 'report.json'), dir]) {
+    await assert.rejects(cli('-s', SCENARIOS, '-a', counting, '-o', out), (err) => err.code === 2, out);
+  }
+  await assert.rejects(readFile(calls, 'utf8'), { code: 'ENOENT' }, 'the agent was never called');
+});

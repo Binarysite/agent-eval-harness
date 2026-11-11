@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
@@ -76,6 +76,13 @@ function toNumber(name, value, { min = 0, max = Infinity, integer = false } = {}
     throw new Error(`--${name} must be ${kind} between ${min} and ${max}`);
   }
   return n;
+}
+
+/** Create the folder of `file` and refuse a path that is a folder itself. */
+async function assertWritablePath(file, flag) {
+  await mkdir(dirname(resolve(file)), { recursive: true });
+  const existing = await stat(file).catch(() => null);
+  if (existing?.isDirectory()) throw new Error(`${flag} ${file} is a folder, not a file`);
 }
 
 async function readReport(file) {
@@ -181,7 +188,8 @@ async function main() {
     `agent-eval-harness  ${scenarios.length} scenarios  agent ${args.agent}  judge ${args.judge}`
       + `  concurrency ${opts.concurrency}${opts.trials > 1 ? `  trials ${opts.trials}` : ''}\n`,
   );
-  // Create the folder up front, as for --out: a bad path then fails before a billed run, not after.
+  // Check both output paths before the run: a bad path then costs no billed calls.
+  await assertWritablePath(args.out, '--out');
   if (args.md) await mkdir(dirname(resolve(args.md)), { recursive: true });
   const started = Date.now();
   // A real agent can take minutes; show a counter, but only to a person at a terminal.
@@ -207,9 +215,14 @@ async function main() {
     options: opts,
     durationMs: Date.now() - started,
   });
-  await mkdir(dirname(resolve(args.out)), { recursive: true });
-  await writeFile(args.out, `${JSON.stringify(report, null, 2)}\n`);
-  console.log(`Report: ${args.out}`);
+  // The run is over and the gate decided: a report that cannot be written now is an
+  // error message, not a different exit code.
+  try {
+    await writeFile(args.out, `${JSON.stringify(report, null, 2)}\n`);
+    console.log(`Report: ${args.out}`);
+  } catch (err) {
+    console.error(`agent-eval: could not write the report to ${args.out}: ${err.message}`);
+  }
   // Appended, never overwritten: a CI job summary collects the output of several steps.
   // A summary that cannot be written must not turn a passed or failed gate into a setup error.
   if (args.md) {
