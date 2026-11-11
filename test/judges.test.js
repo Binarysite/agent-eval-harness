@@ -86,20 +86,52 @@ test('Anthropic judge sends the rubric and parses the verdict', async (t) => {
   assert.equal(req.body.model, 'judge-model');
   assert.equal(req.body.system, JUDGE_SYSTEM);
   assert.match(req.body.messages[0].content, /Rubric: hand off/);
-  assert.equal('output_config' in req.body, false, 'effort is opt-in');
+  assert.equal(req.body.max_tokens, 16000, 'room for thinking before the verdict');
+  assert.deepEqual(req.body.output_config, {
+    effort: 'low',
+    format: {
+      type: 'json_schema',
+      schema: {
+        type: 'object',
+        properties: { pass: { type: 'boolean' }, reason: { type: 'string' } },
+        required: ['pass', 'reason'],
+        additionalProperties: false,
+      },
+    },
+  });
 });
 
-test('Anthropic judge sends effort only when configured', async (t) => {
-  const calls = mockFetch(t, anthropicText('{"pass": true}'), anthropicText('{"pass": true}'));
+test('Anthropic judge effort: low by default, JUDGE_EFFORT or the option change it, null leaves it out', async (t) => {
+  const calls = mockFetch(t, ...Array.from({ length: 4 }, () => anthropicText('{"pass": true, "reason": ""}')));
   const saved = process.env.JUDGE_EFFORT;
   t.after(() => {
     if (saved === undefined) delete process.env.JUDGE_EFFORT;
     else process.env.JUDGE_EFFORT = saved;
   });
-  await createAnthropicJudge({ apiKey: KEY, effort: 'low' })({ scenario, output: output('x') });
+  delete process.env.JUDGE_EFFORT;
+  await createAnthropicJudge({ apiKey: KEY })({ scenario, output: output('x') });
+  await createAnthropicJudge({ apiKey: KEY, effort: 'high' })({ scenario, output: output('x') });
   process.env.JUDGE_EFFORT = 'medium';
   await createAnthropicJudge({ apiKey: KEY })({ scenario, output: output('x') });
-  assert.deepEqual(calls.map((c) => c.body.output_config), [{ effort: 'low' }, { effort: 'medium' }]);
+  await createAnthropicJudge({ apiKey: KEY, effort: null, structured: false })({ scenario, output: output('x') });
+  assert.deepEqual(calls.map((c) => c.body.output_config?.effort), ['low', 'high', 'medium', undefined]);
+  assert.equal('output_config' in calls[3].body, false, 'structured: false and effort: null send no output_config');
+});
+
+test('parseVerdict falls back to the last balanced object when braces come before the verdict', () => {
+  assert.deepEqual(parseVerdict('Considering {the rubric}: {"pass": true}'), { pass: true, reason: '' });
+  assert.deepEqual(
+    parseVerdict('Draft {"pass": false} then, on reflection: {"pass": true, "reason": "has {braces} inside"}'),
+    { pass: true, reason: 'has {braces} inside' },
+  );
+  assert.deepEqual(parseVerdict('{"pass": false, "reason": "x", "meta": {"k": 1}} trailing {note}'), {
+    pass: false, reason: 'x',
+  });
+  assert.deepEqual(parseVerdict('Note {a} first. {"pass": false, "reason": "said \\"no {refund}\\""}'), {
+    pass: false, reason: 'said "no {refund}"',
+  });
+  assert.deepEqual(parseVerdict('a {b} {"pass": true} {left open'), { pass: true, reason: '' });
+  assert.equal(parseVerdict('{the rubric} and {more text}').pass, null);
 });
 
 test('judges pass on the token usage their API reports, cached input included', async (t) => {

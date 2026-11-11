@@ -22,7 +22,7 @@ ANTHROPIC_API_KEY=... node bin/eval.js -s ./my-scenarios.json -a ./my-agent.js -
 | `--judge` | Environment |
 |---|---|
 | `mock` (default) | none; does not read the rubric |
-| `anthropic` | `ANTHROPIC_API_KEY`, optional `JUDGE_MODEL` (default `claude-sonnet-5-5`) and `JUDGE_EFFORT` (sent only when set) |
+| `anthropic` | `ANTHROPIC_API_KEY`, optional `JUDGE_MODEL` (default `claude-sonnet-5-5`) and `JUDGE_EFFORT` (default `low`); the verdict is constrained to a JSON schema |
 | `openai` | `OPENAI_API_KEY`, `JUDGE_MODEL`, optional `OPENAI_BASE_URL` for any OpenAI-compatible endpoint |
 | `none` | rules only |
 

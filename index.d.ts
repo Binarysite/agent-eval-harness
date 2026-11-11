@@ -234,8 +234,16 @@ export function compareReports(
 export function formatComparison(comparison: Comparison): string;
 
 export function createMockJudge(opts?: { maxChars?: number; banned?: string[] }): Judge;
-/** Env: ANTHROPIC_API_KEY (required), JUDGE_MODEL and JUDGE_EFFORT (optional; effort is sent only when set). */
-export function createAnthropicJudge(opts?: { apiKey?: string; model?: string; effort?: string }): Judge;
+/**
+ * Env: ANTHROPIC_API_KEY (required), JUDGE_MODEL and JUDGE_EFFORT (optional). Effort defaults to `low`
+ * and the verdict is constrained to a JSON schema; `effort: null` and `structured: false` turn them off.
+ */
+export function createAnthropicJudge(opts?: {
+  apiKey?: string;
+  model?: string;
+  effort?: string | null;
+  structured?: boolean;
+}): Judge;
 /** Env: OPENAI_API_KEY and JUDGE_MODEL (required), OPENAI_BASE_URL (optional). */
 export function createOpenAICompatibleJudge(opts?: { apiKey?: string; baseUrl?: string; model?: string }): Judge;
 export function buildJudgePrompt(scenario: Scenario, output: AgentOutput): string;

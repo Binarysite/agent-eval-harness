@@ -37,19 +37,62 @@ export function buildJudgePrompt(scenario, output) {
   ].filter(Boolean).join('\n');
 }
 
+/** The verdict in one JSON text, or a throw saying why there is none. */
+function verdictFrom(json) {
+  const parsed = JSON.parse(json);
+  if (typeof parsed?.pass !== 'boolean') throw new Error('"pass" is not a boolean');
+  return { pass: parsed.pass, reason: String(parsed.reason ?? '') };
+}
+
+/** Index of the `}` that closes the `{` at `start`, skipping braces inside strings; -1 if none. */
+function closingBrace(text, start) {
+  let depth = 0;
+  let inString = false;
+  for (let i = start; i < text.length; i += 1) {
+    const c = text[i];
+    if (inString) {
+      if (c === '\\') i += 1;
+      else if (c === '"') inString = false;
+    } else if (c === '"') inString = true;
+    else if (c === '{') depth += 1;
+    else if (c === '}' && --depth === 0) return i;
+  }
+  return -1;
+}
+
+/** The last balanced `{...}` in the text that is a verdict, or null. */
+function lastVerdictObject(text) {
+  for (let start = text.lastIndexOf('{'); start !== -1; start = start ? text.lastIndexOf('{', start - 1) : -1) {
+    const end = closingBrace(text, start);
+    if (end === -1) continue;
+    try {
+      return verdictFrom(text.slice(start, end + 1));
+    } catch {
+      // not a verdict; try the object that starts before this one
+    }
+  }
+  return null;
+}
+
 /**
- * Parse the JSON from the first `{` to the last `}` of a model reply. Anything
- * unusable becomes `pass: null`, which the runner reports as an error instead
- * of a pass, with the first 80 characters of the reply in the reason.
+ * Parse the JSON from the first `{` to the last `}` of a model reply, and when
+ * that is not a verdict (a brace in the reasoning before it), the last balanced
+ * object that is. Anything unusable becomes `pass: null`, which the runner
+ * reports as an error instead of a pass, with the first 80 characters of the
+ * reply in the reason.
  * @param {string} text
  * @returns {{ pass: boolean | null, reason: string }}
  */
 export function parseVerdict(text) {
   try {
     if (typeof text !== 'string') throw new Error('judge output is not text');
-    const parsed = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1));
-    if (typeof parsed.pass !== 'boolean') throw new Error('"pass" is not a boolean');
-    return { pass: parsed.pass, reason: String(parsed.reason ?? '') };
+    try {
+      return verdictFrom(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1));
+    } catch (err) {
+      const found = lastVerdictObject(text);
+      if (found) return found;
+      throw err;
+    }
   } catch (err) {
     // Quote the start of the reply: "Unexpected end of JSON input" alone says nothing.
     const start = typeof text === 'string' && text.length > 80 ? `${text.slice(0, 80)}...` : text;
@@ -80,6 +123,14 @@ const openAIUsage = (u) => (u
 /** Attach usage to a verdict only when the API reported it. */
 const withUsage = (verdict, usage) => (usage ? { ...verdict, usage } : verdict);
 
+/** The verdict shape, sent as a JSON schema where the API supports structured outputs. */
+export const VERDICT_SCHEMA = Object.freeze({
+  type: 'object',
+  properties: { pass: { type: 'boolean' }, reason: { type: 'string' } },
+  required: ['pass', 'reason'],
+  additionalProperties: false,
+});
+
 /** The verdict JSON was cut off. Asking again would cut it off the same way. */
 const truncated = () => Object.assign(
   new Error('judge reply was cut off at the token limit; raise max_tokens or shorten the rubric'),
@@ -89,27 +140,32 @@ const truncated = () => Object.assign(
 /**
  * Anthropic Messages API judge.
  * Env: ANTHROPIC_API_KEY (required), JUDGE_MODEL and JUDGE_EFFORT (optional).
- * Effort is sent only when set, so a model that does not take it still works.
+ * Effort defaults to `low` and the verdict is constrained to VERDICT_SCHEMA.
+ * For a model that takes neither, pass `effort: null` and `structured: false`.
  * The judge exposes `.model`.
- * @param {{ apiKey?: string, model?: string, effort?: string }} [opts]
+ * @param {{ apiKey?: string, model?: string, effort?: string | null, structured?: boolean }} [opts]
  * @returns {import('../runner.js').Judge}
  */
 export function createAnthropicJudge({
   apiKey = process.env.ANTHROPIC_API_KEY,
   model = process.env.JUDGE_MODEL || DEFAULT_ANTHROPIC_MODEL,
-  effort = process.env.JUDGE_EFFORT || undefined,
+  effort = process.env.JUDGE_EFFORT || 'low',
+  structured = true,
 } = {}) {
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY is not set');
+  const outputConfig = {
+    ...(effort && { effort }),
+    ...(structured && { format: { type: 'json_schema', schema: VERDICT_SCHEMA } }),
+  };
   return Object.assign(async function anthropicJudge({ scenario, output, signal }) {
     const data = await postJSON(
       'https://api.anthropic.com/v1/messages',
       { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
       {
         model,
-        max_tokens: 2048,
-        // The verdict is one line of JSON, but thinking tokens count against max_tokens:
-        // on a thinking model, JUDGE_EFFORT=low keeps them from using up the budget first.
-        ...(effort && { output_config: { effort } }),
+        // Thinking tokens count against max_tokens; a tight cap cut verdicts off before the JSON.
+        max_tokens: 16_000,
+        ...(Object.keys(outputConfig).length && { output_config: outputConfig }),
         system: JUDGE_SYSTEM,
         messages: [{ role: 'user', content: buildJudgePrompt(scenario, output) }],
       },
