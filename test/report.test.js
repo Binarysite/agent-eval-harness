@@ -101,3 +101,11 @@ test('token totals appear only when someone reported usage', () => {
   });
   assert.match(formatSummary(s), /\nTokens agent 400 in, 50 out {2}judge 50 in, 5 out\n/);
 });
+
+test('summarize rejects a minPassRate that is not a number from 0 to 1', () => {
+  for (const minPassRate of [NaN, 'abc', '0.9', -0.1, 1.5, Infinity, null]) {
+    assert.throws(() => summarize([], { minPassRate }), RangeError, String(minPassRate));
+  }
+  assert.equal(summarize([], { minPassRate: 0 }).minPassRate, 0);
+  assert.equal(summarize([], { minPassRate: 1 }).minPassRate, 1);
+});
