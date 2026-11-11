@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadScenarios } from '../src/index.js';
-import agent from '../examples/starter/agent.js';
+import agent from '../examples/starter/agent.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 
@@ -16,7 +16,7 @@ test('the starter bank is valid and its stub agent passes it from the CLI', asyn
   const { code, stdout } = await new Promise((resolve) => {
     execFile(
       process.execPath,
-      ['bin/eval.js', '-s', 'examples/starter/scenarios.json', '-a', 'examples/starter/agent.js', '-o', join(dir, 's.json')],
+      ['bin/eval.js', '-s', 'examples/starter/scenarios.json', '-a', 'examples/starter/agent.mjs', '-o', join(dir, 's.json')],
       { cwd: root },
       (err, out) => resolve({ code: err ? err.code : 0, stdout: out }),
     );

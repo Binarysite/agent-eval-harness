@@ -58,5 +58,5 @@ earlier turns in `context.history` and have your agent replay them before it ans
 `examples/starter/scenarios.json` has one such case, `history-01`: the history says the
 user asked to cancel order 1001 and the assistant offered to do it, and the message is
 only "Yes, cancel it." The rule `toolArgs: { cancel_order: { orderId: "1001" } }` passes
-only if the agent used the history to find the order. `examples/starter/agent.js` shows
+only if the agent used the history to find the order. `examples/starter/agent.mjs` shows
 how an agent reads `context.history`.

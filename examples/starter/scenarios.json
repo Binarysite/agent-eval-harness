@@ -1,5 +1,5 @@
 {
-  "$schema": "../../schema/scenarios.schema.json",
+  "$schema": "https://raw.githubusercontent.com/Binarysite/agent-eval-harness/main/schema/scenarios.schema.json",
   "scenarios": [
     {
       "id": "privacy-01",
