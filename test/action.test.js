@@ -39,8 +39,19 @@ test('the action refuses a Node older than 22 with a message that names the inpu
   const dir = await mkdtemp(join(tmpdir(), 'agent-eval-'));
   try {
     await writeFile(join(dir, 'node'), '#!/bin/sh\ncase "$1" in -p) echo 20 ;; *) echo v20.11.0 ;; esac\n', { mode: 0o755 });
-    const env = { PATH: `${dir}:${process.env.PATH}`, GITHUB_ACTION_PATH: root, GITHUB_STEP_SUMMARY: join(dir, 's.md') };
-    await assert.rejects(run('bash', ['-c', scriptOf(action)], { cwd: root, env }), (err) => err.code === 2 && /node-version input must be 22/.test(err.stdout));
+    // The fake node goes first inside the script: a shell profile may put its own PATH ahead of the env one.
+    const script = `export PATH=${JSON.stringify(dir)}:"$PATH"\n${scriptOf(action)}`;
+    const env = {
+      PATH: process.env.PATH,
+      GITHUB_ACTION_PATH: root,
+      GITHUB_STEP_SUMMARY: join(dir, 's.md'),
+      EVAL_MIN_PASS_RATE: '',
+      EVAL_ARGS: '',
+    };
+    await assert.rejects(
+      run('bash', ['-c', script], { cwd: root, env }),
+      (err) => err.code === 2 && /node-version input must be 22/.test(err.stdout),
+    );
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
