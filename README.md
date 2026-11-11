@@ -46,9 +46,9 @@ Copy the starter (three scenarios and an agent stub) and run it, all from the sa
 
 ```bash
 mkdir evals && cd evals
-curl -fsSLO https://raw.githubusercontent.com/Binarysite/agent-eval-harness/v0.4.0/examples/starter/scenarios.json
-curl -fsSLO https://raw.githubusercontent.com/Binarysite/agent-eval-harness/v0.4.0/examples/starter/agent.mjs
-npx -y github:Binarysite/agent-eval-harness#v0.4.0 -s scenarios.json -a agent.mjs
+curl -fsSLO https://raw.githubusercontent.com/Binarysite/agent-eval-harness/v0.4.1/examples/starter/scenarios.json
+curl -fsSLO https://raw.githubusercontent.com/Binarysite/agent-eval-harness/v0.4.1/examples/starter/agent.mjs
+npx -y github:Binarysite/agent-eval-harness#v0.4.1 -s scenarios.json -a agent.mjs
 ```
 
 It passes 3 of 3. Then replace the body of `agent.mjs` with a call to your agent. The
@@ -177,7 +177,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: Binarysite/agent-eval-harness@a11b3ddefa822ded432072a31e9ccb16a90827e6 # v0.4.0
+      - uses: Binarysite/agent-eval-harness@980b24f1b6d8cf4aff85718b5aa95c0796952c3e # v0.4.1
         with:
           scenarios: evals/scenarios.json
           agent: evals/agent.mjs
