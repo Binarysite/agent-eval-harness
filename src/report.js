@@ -13,7 +13,7 @@
  * @typedef {ReturnType<typeof summarize>} Summary
  */
 
-import { formatUsage, pct, sumUsage } from './util.js';
+import { formatUsage, pct, rateNote, sumUsage, wilsonInterval } from './util.js';
 
 /** Overall pass rate a run needs when the caller does not say. */
 export const MIN_PASS_RATE = 0.9;
@@ -76,6 +76,8 @@ export function summarize(results, { minPassRate = MIN_PASS_RATE } = {}) {
     failed: count(results, 'fail'),
     errors: count(results, 'error'),
     passRate,
+    // The gate compares the point estimate; the interval says how much it can move by chance.
+    passRateInterval: wilsonInterval(passed, results.length),
     minPassRate,
     critical: { total: critical.length, passed: critical.length - criticalFailures.length, failures: criticalFailures },
     byCategory,
@@ -124,7 +126,7 @@ export function formatSummary(s) {
   const totals = `Total ${s.total}  passed ${s.passed}  failed ${s.failed}  errors ${s.errors}`;
   lines.push(
     '',
-    `${totals}  pass rate ${pct(s.passRate)} (min ${pct(s.minPassRate)})`,
+    `${totals}  pass rate ${pct(s.passRate)} (${rateNote(s)})`,
     `Critical ${s.critical.total}  passed ${s.critical.passed}`,
     ...(s.usage ? [`Tokens ${formatUsage(s.usage)}`] : []),
     ...(s.flaky?.length ? [`Flaky ${s.flaky.length}: ${s.flaky.join(', ')}`] : []),

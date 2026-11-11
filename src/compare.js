@@ -1,4 +1,4 @@
-import { pct } from './util.js';
+import { formatInterval, pct, wilsonInterval } from './util.js';
 import { PROVENANCE_KEYS } from './provenance.js';
 
 /**
@@ -16,6 +16,12 @@ function assertReport(report, label) {
   if (!Array.isArray(report?.results) || typeof report?.summary?.passRate !== 'number') {
     throw new Error(`${label} is not an agent-eval report`);
   }
+}
+
+/** The 95% interval of a report's pass rate, or null for a report without counts. */
+function intervalOf(report) {
+  const { passed, total } = report.summary;
+  return Number.isInteger(passed) && Number.isInteger(total) && passed <= total ? wilsonInterval(passed, total) : null;
 }
 
 /**
@@ -55,10 +61,15 @@ export function compareReports(before, after, { beforeLabel = 'before', afterLab
       warnings.push(`${name} differ between the runs: ${read(before)} -> ${read(after)}`);
     }
   }
+  const beforeInterval = intervalOf(before);
+  const afterInterval = intervalOf(after);
+  const withinNoise = beforeInterval && afterInterval
+    ? beforeInterval.low <= afterInterval.high && afterInterval.low <= beforeInterval.high
+    : null;
   return {
     changes,
     regressions: changes.filter((change) => change.from === 'pass'),
-    passRate: { before: before.summary.passRate, after: after.summary.passRate },
+    passRate: { before: before.summary.passRate, after: after.summary.passRate, beforeInterval, afterInterval, withinNoise },
     notes,
     warnings,
   };
@@ -73,6 +84,13 @@ export function formatComparison(comparison) {
   if (!lines.length) lines.push('No case changed status.');
   const { before, after } = comparison.passRate;
   lines.push('', `Pass rate ${pct(before)} -> ${pct(after)}  regressions ${comparison.regressions.length}`);
+  const { beforeInterval: a, afterInterval: b, withinNoise } = comparison.passRate;
+  if (withinNoise !== null && withinNoise !== undefined) {
+    const range = (i) => formatInterval(i).replace('95% CI ', '');
+    lines.push(withinNoise
+      ? `Pass rate change is within noise: the 95% intervals overlap (${range(a)} and ${range(b)}).`
+      : `Pass rate change is beyond noise: the 95% intervals do not overlap (${range(a)} and ${range(b)}).`);
+  }
   lines.push(...(comparison.notes ?? []));
   for (const w of comparison.warnings ?? []) lines.push(`WARNING: ${w}`);
   return lines.join('\n');

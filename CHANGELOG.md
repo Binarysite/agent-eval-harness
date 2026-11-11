@@ -32,6 +32,9 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- The summary carries a 95% Wilson interval of the pass rate (`passRateInterval`), printed next
+  to it in the console and the Markdown summary. `compare` says whether a pass-rate change is
+  within noise (the two intervals overlap) or beyond it. The gate still compares the rate itself.
 - The Anthropic judge asks for a structured verdict (`output_config.format`, a JSON schema of
   `{ pass: boolean, reason: string }`), defaults to `effort: low` and allows 16,000 output
   tokens, so thinking no longer uses up the budget before the verdict. `effort: null` and

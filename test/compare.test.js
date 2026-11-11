@@ -76,3 +76,23 @@ test('warns when the two runs selected different cases or ran a different number
   ]);
   assert.deepEqual(compareReports(before, before).warnings, []);
 });
+
+const counted = (passed, total) => ({
+  summary: { passRate: passed / total, passed, total },
+  results: Array.from({ length: total }, (_, i) => ({ id: `c${i}`, status: i < passed ? 'pass' : 'fail', critical: false })),
+});
+
+test('a pass-rate change whose 95% intervals overlap is labelled within noise', () => {
+  const c = compareReports(counted(24, 24), counted(23, 24));
+  assert.equal(c.passRate.withinNoise, true);
+  assert.match(formatComparison(c), /^Pass rate change is within noise: the 95% intervals overlap \(86\.2% to 100\.0% and 79\.8% to 99\.3%\)\.$/m);
+
+  const big = compareReports(counted(100, 100), counted(80, 100));
+  assert.equal(big.passRate.withinNoise, false);
+  assert.match(formatComparison(big), /^Pass rate change is beyond noise: the 95% intervals do not overlap/m);
+
+  assert.equal(compareReports(counted(5, 5), counted(5, 5)).passRate.withinNoise, true);
+  const old = compareReports(report(1, ['a', 'pass']), report(1, ['a', 'pass']));
+  assert.equal(old.passRate.withinNoise, null, 'reports without counts get no label');
+  assert.doesNotMatch(formatComparison(old), /noise/);
+});

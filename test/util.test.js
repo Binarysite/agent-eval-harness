@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { formatUsage, pct, redactSecrets, sumUsage } from '../src/util.js';
+import { formatUsage, pct, redactSecrets, sumUsage, wilsonInterval } from '../src/util.js';
 
 test('redactSecrets removes the key it is given and anything shaped like a provider key', () => {
   const cases = [
@@ -28,4 +28,16 @@ test('pct, sumUsage and formatUsage', () => {
   assert.deepEqual(total, { agent: { inputTokens: 4, outputTokens: 6 }, judge: { inputTokens: 5, outputTokens: 6 } });
   assert.equal(formatUsage(total), 'agent 4 in, 6 out  judge 5 in, 6 out');
   assert.equal(formatUsage(total, '; '), 'agent 4 in, 6 out; judge 5 in, 6 out');
+});
+
+test('wilsonInterval gives the 95% Wilson score interval', () => {
+  const round = ({ low, high }) => [Number(low.toFixed(4)), Number(high.toFixed(4))];
+  // Reference values: Wilson score interval, z = 1.96.
+  assert.deepEqual(round(wilsonInterval(23, 24)), [0.7976, 0.9926]);
+  assert.deepEqual(round(wilsonInterval(24, 24)), [0.862, 1]);
+  assert.deepEqual(round(wilsonInterval(0, 10)), [0, 0.2775]);
+  assert.deepEqual(round(wilsonInterval(5, 10)), [0.2366, 0.7634]);
+  assert.equal(wilsonInterval(0, 0), null, 'no cases, no interval');
+  assert.throws(() => wilsonInterval(3, 2), RangeError);
+  assert.throws(() => wilsonInterval(1.5, 2), RangeError);
 });
