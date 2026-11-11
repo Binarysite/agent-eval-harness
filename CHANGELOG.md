@@ -32,6 +32,12 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- The Anthropic judge asks for a structured verdict (`output_config.format`, a JSON schema of
+  `{ pass: boolean, reason: string }`), defaults to `effort: low` and allows 16,000 output
+  tokens, so thinking no longer uses up the budget before the verdict. `effort: null` and
+  `structured: false` turn either off for a model that does not take them.
+- `parseVerdict` falls back to the last balanced `{...}` that is a verdict, so a brace in the
+  judge's reasoning before the JSON (`Considering {the rubric}: {"pass": true}`) still parses.
 - A published run of the real LLM judge (`openai` judge, `deepseek-chat`) over the 24 sticker-shop
   scenarios, with the report in `reports/real-judge-run/`: 23 of 24 verdicts matched the expected
   pass, 4849 tokens in and 673 out. The README limits section now cites it.

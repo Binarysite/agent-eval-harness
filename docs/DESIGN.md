@@ -141,7 +141,8 @@ check keeps the code honest to it.
   that ends in an error reports nothing, so retried calls are undercounted, and
   cost is left to you. Spend is limited by running the judge only after the
   rules pass, by `--critical` and `--category` runs, by the offline mock judge,
-  by the example agent's low effort and by `JUDGE_EFFORT`.
+  by the example agent's low effort and by the Anthropic judge's `low` default
+  effort (`JUDGE_EFFORT`).
 - **Reports keep every reply.** Each result holds the agent's full reply and
   tool calls. With a real agent and real data, treat the report as sensitive:
   do not commit it or upload it as a public CI artifact. CI here uploads only
