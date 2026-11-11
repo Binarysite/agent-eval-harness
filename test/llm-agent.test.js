@@ -113,3 +113,21 @@ test('defaults to the same model as the Anthropic judge', (t) => {
   delete process.env.JUDGE_MODEL;
   assert.equal(llmAgent.model, createAnthropicJudge({ apiKey: 'k' }).model);
 });
+
+test('ANTHROPIC_BASE_URL points the agent at another Messages-compatible endpoint', async (t) => {
+  const urls = [];
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    urls.push(url);
+    return new Response(JSON.stringify(answer('Hi.')), { status: 200 });
+  });
+  const saved = process.env.ANTHROPIC_BASE_URL;
+  t.after(() => {
+    if (saved === undefined) delete process.env.ANTHROPIC_BASE_URL;
+    else process.env.ANTHROPIC_BASE_URL = saved;
+  });
+  delete process.env.ANTHROPIC_BASE_URL;
+  await llmAgent({ message: 'hi', context: {} });
+  process.env.ANTHROPIC_BASE_URL = 'https://example.com/anthropic/';
+  await llmAgent({ message: 'hi', context: {} });
+  assert.deepEqual(urls, ['https://api.anthropic.com/v1/messages', 'https://example.com/anthropic/v1/messages']);
+});

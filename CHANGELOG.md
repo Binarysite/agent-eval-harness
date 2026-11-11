@@ -38,6 +38,8 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   reports TPR, FPR and Cohen's kappa against the labels, per trial and by majority,
   self-consistency across trials, what the rules alone catch, and cost per 100 verdicts from
   prices you pass. See `docs/CALIBRATION.md`.
+- The example LLM agent reads `ANTHROPIC_BASE_URL`, so it runs against any endpoint that
+  speaks the Messages API.
 - Judge verdicts record `servedModel`, the model the API says answered, since an alias can
   map to a different model than the one requested.
 - `schema/scenarios.schema.json`, a JSON Schema (draft 2020-12) of a scenario bank, generated
