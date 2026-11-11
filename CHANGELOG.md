@@ -23,6 +23,13 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Key redaction also covers `xai-`, `AIza`, `ghp_` and `github_pat_` keys and any `Bearer`
   token.
 
+### Changed
+
+- `compare` prints a different commit as an info line (`commits: abc -> def`) instead of a
+  warning, and returns it in `notes`: comparing two commits is what it is for.
+- Shared helpers moved to `src/util.js`, so `report`, `markdown` and `compare` no longer
+  import from `runner`, `http` and `report`.
+
 ### Added
 
 - A published run of the real LLM judge (`openai` judge, `deepseek-chat`) over the 24 sticker-shop

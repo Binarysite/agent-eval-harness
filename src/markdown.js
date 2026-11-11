@@ -1,5 +1,4 @@
-import { redactSecrets } from './http.js';
-import { pct } from './report.js';
+import { formatUsage, pct, redactSecrets } from './util.js';
 
 /**
  * A Markdown summary of one run, for a CI job page (`$GITHUB_STEP_SUMMARY`).
@@ -74,9 +73,7 @@ export function formatMarkdown({ meta = {}, summary: s, results }) {
   }
   if (s.flaky?.length) lines.push(`Flaky: ${s.flaky.map(cell).join(', ')}`, '');
 
-  const usage = s.usage
-    ? Object.entries(s.usage).map(([role, u]) => `${role} ${u.inputTokens} in, ${u.outputTokens} out`).join('; ')
-    : null;
+  const usage = s.usage ? formatUsage(s.usage, '; ') : null;
   lines.push(
     '### Run',
     '',

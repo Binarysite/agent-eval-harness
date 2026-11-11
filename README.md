@@ -151,8 +151,9 @@ pass    -> fail    prv-01  [critical]
 Pass rate 100.0% -> 95.8%  regressions 1
 ```
 
-`compare` exits 1 when a case that passed before now fails, errors or is missing, and
-warns when the runs differ in judge or agent model, scenario file, commit, filters or trials.
+`compare` exits 1 when a case that passed before now fails, errors or is missing. It
+warns when the runs differ in judge or agent model, scenario file, filters or trials, and
+prints the two commits as an info line.
 
 ## In GitHub Actions
 

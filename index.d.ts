@@ -181,6 +181,8 @@ export interface Comparison {
   /** Changes whose previous status was `pass`, including `pass -> missing`. */
   regressions: StatusChange[];
   passRate: { before: number; after: number };
+  /** Facts worth seeing that do not make the runs incomparable, such as `commits: abc -> def`. */
+  notes: string[];
   warnings: string[];
 }
 

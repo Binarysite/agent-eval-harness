@@ -13,7 +13,7 @@
  * @typedef {ReturnType<typeof summarize>} Summary
  */
 
-import { sumUsage } from './runner.js';
+import { formatUsage, pct, sumUsage } from './util.js';
 
 /** Overall pass rate a run needs when the caller does not say. */
 export const MIN_PASS_RATE = 0.9;
@@ -85,18 +85,6 @@ export function summarize(results, { minPassRate = MIN_PASS_RATE } = {}) {
     gate: { pass: reasons.length === 0, reasons },
     warnings,
   };
-}
-
-/** Format a 0..1 ratio as a percentage with one decimal. */
-export function pct(x) {
-  return `${(x * 100).toFixed(1)}%`;
-}
-
-/** "agent 1200 in, 300 out  judge 800 in, 40 out", for the roles that reported tokens. */
-function formatUsage(usage) {
-  return Object.entries(usage)
-    .map(([role, u]) => `${role} ${u.inputTokens} in, ${u.outputTokens} out`)
-    .join('  ');
 }
 
 const LABEL = { pass: 'PASS', fail: 'FAIL', error: 'ERR ' };
