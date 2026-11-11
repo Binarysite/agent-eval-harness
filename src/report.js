@@ -24,6 +24,10 @@ export const MIN_PASS_RATE = 0.9;
  * @param {{ minPassRate?: number }} [opts]
  */
 export function summarize(results, { minPassRate = MIN_PASS_RATE } = {}) {
+  // NaN fails every comparison, so `passRate < NaN` would never block the gate.
+  if (typeof minPassRate !== 'number' || !(minPassRate >= 0 && minPassRate <= 1)) {
+    throw new RangeError(`minPassRate must be a number from 0 to 1, got ${JSON.stringify(minPassRate) ?? String(minPassRate)}`);
+  }
   const count = (list, status) => list.filter((r) => r.status === status).length;
   const critical = results.filter((r) => r.critical);
   const criticalFailures = critical.filter((r) => r.status !== 'pass').map((r) => r.id);
