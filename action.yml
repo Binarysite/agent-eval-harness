@@ -17,7 +17,7 @@ inputs:
     required: false
     default: mock
   min-pass-rate:
-    description: Overall pass rate required, 0 to 1. Empty keeps the harness default.
+    description: Overall pass rate required, 0 to 1. Empty or whitespace-only keeps the harness default.
     required: false
     default: ''
   args:
@@ -53,7 +53,8 @@ runs:
           exit 2
         fi
         extra=()
-        if [ -n "$EVAL_MIN_PASS_RATE" ]; then extra+=(--min-pass-rate "$EVAL_MIN_PASS_RATE"); fi
+        # Whitespace-only counts as unset: the CLI rejects a blank value instead of reading 0.
+        if [ -n "${EVAL_MIN_PASS_RATE//[[:space:]]/}" ]; then extra+=(--min-pass-rate "$EVAL_MIN_PASS_RATE"); fi
         # Split on any whitespace, newlines included, without expanding globs.
         if [ -n "$EVAL_ARGS" ]; then set -f; more=($EVAL_ARGS); set +f; extra+=(${more[@]+"${more[@]}"}); fi
         node "$GITHUB_ACTION_PATH/bin/eval.js" -s "$EVAL_SCENARIOS" -a "$EVAL_AGENT" --judge "$EVAL_JUDGE" \

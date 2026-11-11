@@ -91,10 +91,15 @@ repository the page is public, and the JSON report already holds them. What rema
 is redacted, cut and escaped, since it can still carry words from the agent.
 
 **Output paths are checked before the first call.** For both `--out` and `--md`, a
-folder that cannot be created, or an `--out` path that is a folder, fails before the
-run (exit 2), so a bad path costs no billed calls. Once the run is over the gate has
-decided: a report or summary that still cannot be written is an error message, never
-a different exit code.
+blank path, a folder that cannot be created, a path that is a folder, or a file that
+cannot be opened for writing fails before the run (exit 2), so a bad path costs no
+billed calls. The check opens the file for appending, which never truncates it, and
+removes it again if it did not exist, so a run that stops early leaves no empty file.
+A report that still cannot be written after the run exits 2 whatever the gate said,
+since a CI step must not pass without the report it promised. A Markdown summary
+that cannot be appended after the run is only an error message: the gate keeps its
+exit code. Numeric flags reject a blank value, because `Number('')` is 0 and an unset
+shell variable in `--min-pass-rate "$RATE"` would otherwise gate at 0.
 
 **The action runs the gate and nothing else.** It is a composite action with no
 install step, because there is nothing to install, and it does not upload the JSON

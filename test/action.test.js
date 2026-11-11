@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
+import { MIN_PASS_RATE } from '../src/report.js';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const run = promisify(execFile);
@@ -86,9 +87,14 @@ test('the action script runs the gate, appends the summary and passes the exit c
   const multiReport = JSON.parse(await readFile(join(dir, 'multi.json'), 'utf8'));
   assert.deepEqual([multiReport.meta.options.trials, multiReport.summary.minPassRate], [2, 0.99]);
 
+  // A whitespace-only min-pass-rate is unset, like an empty one: it keeps the default.
+  await bash(env('agent.js', { EVAL_MIN_PASS_RATE: ' \n\t', EVAL_ARGS: `-o ${join(dir, 'blank.json')}` }));
+  const blankReport = JSON.parse(await readFile(join(dir, 'blank.json'), 'utf8'));
+  assert.equal(blankReport.summary.minPassRate, MIN_PASS_RATE);
+
   await assert.rejects(bash(env('regressed-agent.js')), (err) => err.code === 1 && /RESULT: FAIL/.test(err.stdout));
   const text = await readFile(summary, 'utf8');
-  assert.deepEqual(text.match(/^## agent-eval: \w+/gm), ['## agent-eval: PASS', '## agent-eval: PASS', '## agent-eval: FAIL']);
+  assert.deepEqual(text.match(/^## agent-eval: \w+/gm), ['## agent-eval: PASS', '## agent-eval: PASS', '## agent-eval: PASS', '## agent-eval: FAIL']);
 });
 
 test('Dependabot watches only GitHub Actions, weekly', async () => {

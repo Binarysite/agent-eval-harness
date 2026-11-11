@@ -4,7 +4,7 @@ import { execFile } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import { buildReport, createMockJudge, formatMarkdown, loadScenarios, runSuite, summarize } from '../src/index.js';
 import agent from '../examples/sticker-shop/agent.js';
@@ -140,7 +140,7 @@ test('--md appends to the file instead of overwriting it, and a failed gate stil
   }
 });
 
-test('--md creates missing folders, a bad folder exits 2 before the run, and a failed append keeps the gate exit code', async () => {
+test('--md creates missing folders, a bad path exits 2 before the run, and a failed append keeps the gate exit code', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'agent-eval-'));
   try {
     const out = join(dir, 'report.json');
@@ -156,13 +156,32 @@ test('--md creates missing folders, a bad folder exits 2 before the run, and a f
       (err) => err.code === 2 && !/RESULT:/.test(err.stdout),
     );
 
-    // A directory cannot be appended to: the gate still decides the exit code.
+    // A folder cannot be appended to: that is caught before the run too.
     const asDir = join(dir, 'a-folder');
     await mkdir(asDir);
-    const ok = await cli('-s', SCENARIOS, '-a', 'examples/sticker-shop/agent.js', '--md', asDir, '--out', out);
-    assert.match(ok.stderr, /could not write the summary/);
     await assert.rejects(
-      cli('-s', SCENARIOS, '-a', 'examples/sticker-shop/regressed-agent.js', '--md', asDir, '--out', out),
+      cli('-s', SCENARIOS, '-a', 'examples/sticker-shop/agent.js', '--md', asDir, '--out', out),
+      (err) => err.code === 2 && /--md .* is a folder/.test(err.stderr) && !/RESULT:/.test(err.stdout),
+    );
+
+    // A summary that breaks during the run: the gate still decides the exit code.
+    const late = join(dir, 'late.md');
+    const wrap = async (name) => {
+      const file = join(dir, `sabotage-${name}`);
+      const real = pathToFileURL(join(root, 'examples/sticker-shop', name)).href;
+      await writeFile(file, [
+        "import { mkdirSync } from 'node:fs';",
+        `import real from ${JSON.stringify(real)};`,
+        `export default async function agent(input) { mkdirSync(${JSON.stringify(late)}, { recursive: true }); return real(input); }`,
+        '',
+      ].join('\n'));
+      return file;
+    };
+    const ok = await cli('-s', SCENARIOS, '-a', await wrap('agent.js'), '--md', late, '--out', out);
+    assert.match(ok.stderr, /could not write the summary/);
+    await rm(late, { recursive: true });
+    await assert.rejects(
+      cli('-s', SCENARIOS, '-a', await wrap('regressed-agent.js'), '--md', late, '--out', out),
       (err) => err.code === 1 && /could not write the summary/.test(err.stderr),
     );
   } finally {

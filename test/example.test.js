@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -111,6 +111,12 @@ test('CLI setup errors exit 2', async (t) => {
     [['-s', SCENARIOS, '-a', noDefault], /must export the agent as default/],
     [['-s', SCENARIOS, '-a', AGENT, '--retries', '1.5'], /--retries must be an integer/],
     [['-s', SCENARIOS, '-a', AGENT, '--trials', '0'], /--trials must be an integer between 1/],
+    // Number('') and Number(' ') are 0: an unset shell variable must not gate at 0.
+    [['-s', SCENARIOS, '-a', AGENT, '--min-pass-rate', ''], /--min-pass-rate must be a number between 0 and 1, got ""/],
+    [['-s', SCENARIOS, '-a', AGENT, '--min-pass-rate', ' \t'], /--min-pass-rate must be a number between 0 and 1/],
+    [['-s', SCENARIOS, '-a', AGENT, '--concurrency', ' '], /--concurrency must be an integer/],
+    [['-s', SCENARIOS, '-a', AGENT, '-o', ''], /--out needs a file path/],
+    [['-s', SCENARIOS, '-a', AGENT, '--md', ' '], /--md needs a file path/],
     [['-s', SCENARIOS, '-a', AGENT, '--judge', 'nope'], /unknown judge "nope"/],
     [['-s', SCENARIOS, '-a', AGENT, '--bogus'], /Unknown option '--bogus'.*\(see agent-eval --help\)/],
     [['-s', SCENARIOS, '-a', AGENT, '-c', 'privacy,privcy'], /unknown category "privcy" \(categories: .*privacy/],
@@ -159,10 +165,38 @@ test('a bad --out path exits 2 before the run, with zero agent calls', async (t)
   ].join('\n'));
   const aFile = join(dir, 'a-file');
   await writeFile(aFile, 'not a folder');
-  for (const out of [join(aFile, 'report.json'), dir]) {
+  const readOnly = join(dir, 'read-only.json');
+  await writeFile(readOnly, '{}');
+  await chmod(readOnly, 0o444);
+  // root ignores file modes, so the read-only case is checked only where it can fail.
+  const outs = [join(aFile, 'report.json'), dir, '', ...(process.getuid?.() === 0 ? [] : [readOnly])];
+  for (const out of outs) {
     await assert.rejects(cli('-s', SCENARIOS, '-a', counting, '-o', out), (err) => err.code === 2, out);
   }
   await assert.rejects(readFile(calls, 'utf8'), { code: 'ENOENT' }, 'the agent was never called');
+});
+
+test('the --out check leaves nothing behind, and a report that cannot be written after the run exits 2', async (t) => {
+  const dir = await tempDir(t);
+  const out = join(dir, 'report.json');
+  const md = join(dir, 'summary.md');
+  // The agent turns both output paths into folders mid-run, so the writes after the run fail.
+  const sabotage = join(dir, 'sabotage-agent.mjs');
+  await writeFile(sabotage, [
+    "import { mkdirSync } from 'node:fs';",
+    `export default async function agent() { for (const p of ${JSON.stringify([out, md])}) mkdirSync(p, { recursive: true });`,
+    "  return { reply: 'x' }; }",
+    '',
+  ].join('\n'));
+  // A failed setup after the path check (an unknown category) leaves no empty report behind.
+  await assert.rejects(cli('-s', SCENARIOS, '-a', AGENT, '-c', 'nope', '-o', out), (err) => err.code === 2);
+  await assert.rejects(readFile(out), { code: 'ENOENT' });
+
+  await assert.rejects(
+    cli('-s', SCENARIOS, '-a', sabotage, '-c', 'privacy', '-o', out, '--md', md),
+    (err) => err.code === 2 && /RESULT:/.test(err.stdout)
+      && /could not write the report/.test(err.stderr) && /could not write the summary/.test(err.stderr),
+  );
 });
 
 test('the example agent reports what its lookup and preflight tools returned', async () => {
