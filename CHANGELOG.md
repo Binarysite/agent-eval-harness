@@ -6,6 +6,13 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- A timed-out call no longer overlaps its retry. The harness cannot stop an agent that ignores
+  its abort signal, so an immediate retry ran next to it: a 50 ms timeout, two retries and a
+  120 ms agent put three billed calls in flight for one case. A timeout is now not retried by
+  default; `--retry-on-timeout` (`retryOnTimeout`) retries it once the call has settled.
+
 ### Added
 
 - A published run of the real LLM judge (`openai` judge, `deepseek-chat`) over the 24 sticker-shop

@@ -128,13 +128,16 @@ test('the runner waits for Retry-After before retrying', async () => {
   assert.ok(times[1] - times[0] >= 35, `waited ${times[1] - times[0]} ms`);
 });
 
-test('an agent that hangs once is retried and answers on the second attempt', async () => {
+test('with retryOnTimeout, an agent that hangs once and honors the abort answers on the second attempt', async () => {
   let calls = 0;
-  const hangsOnce = () => {
+  const hangsOnce = ({ signal }) => {
     calls += 1;
-    return calls === 1 ? new Promise(() => {}) : Promise.resolve({ reply: 'ok' });
+    if (calls > 1) return Promise.resolve({ reply: 'ok' });
+    return new Promise((_, reject) => signal.addEventListener('abort', () => reject(signal.reason)));
   };
-  const r = await runCase(scenario(), { agent: hangsOnce, timeoutMs: 20, retries: 1, retryDelayMs: 0 });
+  const r = await runCase(scenario(), {
+    agent: hangsOnce, timeoutMs: 20, retries: 1, retryDelayMs: 0, retryOnTimeout: true,
+  });
   assert.equal(r.status, 'pass');
   assert.equal(r.attempts, 2);
 });
@@ -319,4 +322,45 @@ test('malformed usage breaks the contract: an agent error, an undecided judge', 
   });
   assert.equal(fromJudge.status, 'error');
   assert.match(fromJudge.verdict.reason, /judge usage must be/);
+});
+
+/** An agent that ignores its abort signal and counts how many of its calls overlap. */
+function overlapCounter(ms) {
+  const stats = { calls: 0, inFlight: 0, maxInFlight: 0 };
+  const agent = async () => {
+    stats.calls += 1;
+    stats.inFlight += 1;
+    stats.maxInFlight = Math.max(stats.maxInFlight, stats.inFlight);
+    await new Promise((r) => setTimeout(r, ms));
+    stats.inFlight -= 1;
+    return { reply: 'late' };
+  };
+  return { agent, stats };
+}
+
+test('a timed-out call is not retried by default, so calls never overlap', async () => {
+  const { agent, stats } = overlapCounter(120);
+  const r = await runCase(scenario(), { agent, timeoutMs: 50, retries: 2, retryDelayMs: 0 });
+  assert.equal(r.status, 'error');
+  assert.match(r.error, /timed out after 50 ms/);
+  assert.equal(stats.calls, 1);
+  assert.equal(stats.maxInFlight, 1);
+  await new Promise((r) => setTimeout(r, 100));
+});
+
+test('with retryOnTimeout, a retry waits until the timed-out call has settled', async () => {
+  const { agent, stats } = overlapCounter(80);
+  const r = await runCase(scenario(), { agent, timeoutMs: 50, retries: 2, retryDelayMs: 0, retryOnTimeout: true });
+  assert.equal(stats.maxInFlight, 1);
+  assert.equal(r.status, 'error');
+  assert.equal(stats.calls, 3);
+});
+
+test('with retryOnTimeout, a call that ignores the abort past the grace period is not retried', async () => {
+  let calls = 0;
+  const stuck = () => { calls += 1; return new Promise(() => {}); };
+  const r = await runCase(scenario(), { agent: stuck, timeoutMs: 20, retries: 2, retryDelayMs: 0, retryOnTimeout: true });
+  assert.equal(r.status, 'error');
+  assert.equal(calls, 1);
+  assert.match(r.error, /did not stop/);
 });

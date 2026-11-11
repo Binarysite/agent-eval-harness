@@ -26,7 +26,7 @@ mock judge or no judge fails the gate, because neither reads the rubric (their
 verdicts record `graded: false`).
 
 **Retries for infrastructure, never for answers.** Agent and judge share one
-policy: a network error, an abort or timeout, a 429 or a 5xx is retried
+policy: a network error, an abort, a 429 or a 5xx is retried
 (`--retries`, default 1; the result and the verdict record their `attempts`),
 after the server's `Retry-After` when the error carries one (`retryAfterMs`,
 filled in from the header by the bundled judges and the example agent, capped at
@@ -39,9 +39,17 @@ a "no" from the judge, is never retried: retrying until green hides exactly the
 flakiness an eval exists to show.
 To get this from your own agent, throw an `Error` with a numeric `status` for
 HTTP failures, add `retryAfterMs` if the server sent `Retry-After`, and set
-`retryable: false` on an error that would repeat. A timed-out call is retried
-and billed again, so raise `--timeout` (default 10 s) for a real tool loop or an
-LLM judge.
+`retryable: false` on an error that would repeat.
+
+**A timed-out call is not retried unless you ask, and calls never overlap.** A
+timeout aborts the signal, but it cannot stop code that ignores the signal, so a
+retry started at once would run next to the call it replaces: with a 50 ms
+timeout, two retries and a 120 ms agent, three calls for one case were in flight
+together, each billed. So a timeout ends the case as `error` by default. With
+`--retry-on-timeout` (`retryOnTimeout`) the retry waits until the timed-out call
+has settled, up to one more `--timeout`; a call still running after that is
+reported and not retried. Raise `--timeout` (default 10 s) for a real tool loop
+or an LLM judge.
 A retry reruns the whole case from the agent call on, every tool call in it
 included, and so does each of `--trials`. Tools with side effects (a refund, an
 email, a ticket) must be idempotent or mocks in the eval.
@@ -130,7 +138,8 @@ CI runs both.
   do not commit it or upload it as a public CI artifact. CI here uploads only
   the report of the invented sticker shop.
 - **A timeout aborts the signal, it cannot stop your code.** An agent that
-  ignores `signal` may keep running after the harness has moved on.
+  ignores `signal` may keep running after the harness has moved on to the next
+  case; it is never retried while it runs.
 
 ## Roadmap
 
