@@ -37,8 +37,9 @@ Real output, trimmed; exit code 1. The agent is a rule-based sticker-shop stand-
 order ownership check switched off, and 95.8% clears the 90% bar, so a pass rate alone would
 have shipped it.
 
-Extracted from the eval harness of a chat agent that is in a live pilot on demo sites for
-prospective clinics; no paying clinic yet. That bank is private; the sticker shop is invented.
+The same release gate I use on a chat agent that is in a live pilot on demo sites for
+prospective clinics (no paying clinic yet), rewritten from scratch around an invented shop;
+that bank is private.
 
 ## Try it on your own agent
 
@@ -241,6 +242,9 @@ decides what never reaches the model, this harness proves that did not lower qua
 [shell-guard-bench](https://github.com/Binarysite/shell-guard-bench) limits what the agent
 can do in a shell. Under this harness the router's example first scored 20/24 and failed a
 critical privacy case; four avoid words fixed it (24/24).
+
+[mcp-footprint](https://github.com/Binarysite/mcp-footprint) measures how many context
+tokens an MCP server's tool definitions cost before the first message, with a CI budget.
 
 ## Engineering
 

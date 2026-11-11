@@ -6,6 +6,11 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- The README says the harness is a from-scratch rewrite of the private gate, not an extraction,
+  and "Works with" lists mcp-footprint.
+
 ## [0.4.2] - 2026-11-11
 
 ### Changed
