@@ -199,6 +199,31 @@ test('the --out check leaves nothing behind, and a report that cannot be written
   );
 });
 
+test('an agent that ignores the abort and holds the process open cannot hang the CLI', async (t) => {
+  const dir = await tempDir(t);
+  const out = join(dir, 'report.json');
+  const md = join(dir, 'summary.md');
+  // Never answers, ignores the signal and keeps a timer alive, as a hung socket would.
+  const hung = join(dir, 'hung-agent.mjs');
+  await writeFile(hung, 'export default () => new Promise(() => { setInterval(() => {}, 1000); });\n');
+  const started = Date.now();
+  await assert.rejects(
+    run(process.execPath, ['bin/eval.js', '-s', SCENARIOS, '-a', hung, '-c', 'privacy', '--timeout', '50',
+      '--concurrency', '1', '-o', out, '--md', md], { cwd: root, timeout: 20_000 }),
+    (err) => err.code === 1
+      && /WARNING: an agent or judge call ignored the abort/.test(err.stdout)
+      && /the run stopped on a stuck call/.test(err.stdout)
+      && /not run, agent stuck/.test(err.stdout),
+  );
+  assert.ok(Date.now() - started < 15_000, 'the CLI exits instead of waiting for the stuck call');
+  const report = JSON.parse(await readFile(out, 'utf8'));
+  assert.equal(report.summary.gate.pass, false);
+  const [first, ...rest] = report.results;
+  assert.match(first.error, /did not stop within 50 ms of the abort/);
+  assert.ok(rest.length > 0 && rest.every((r) => r.stopped === true && r.attempts === 0));
+  assert.match(await readFile(md, 'utf8'), /the run stopped on a stuck call/);
+});
+
 test('the example agent reports what its lookup and preflight tools returned', async () => {
   const own = await agent({ message: 'Where is my order #10482?', context: { customerId: 'cus_A' } });
   assert.deepEqual(own.toolCalls[0].result, {

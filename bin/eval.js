@@ -47,9 +47,10 @@ const HELP = `Usage: agent-eval -s <scenarios.json> -a <agent.js> [options]
       --critical            only critical cases
       --concurrency <n>     cases in flight at once (default ${DEFAULTS.concurrency})
       --retries <n>         retries on network errors, 429 and 5xx (default ${DEFAULTS.retries})
-      --retry-on-timeout    also retry a call that timed out, once it has stopped. A timed-out
-                            call is always waited for, up to one more timeout, so calls never
-                            overlap unless an agent ignores the abort for longer than that
+      --retry-on-timeout    also retry a call that timed out, once it has stopped. Calls never
+                            exceed --concurrency: a call that ignores the abort keeps its slot
+                            until it stops; one still running two timeouts after it timed out
+                            stops the run, the cases not yet run are errors and the gate fails
       --trials <k>          run each case k times; mixed results mark it flaky and a
                             critical case must pass k/k (default ${DEFAULTS.trials})
       --timeout <ms>        per call timeout for agent and judge (default ${DEFAULTS.timeout})
@@ -257,6 +258,12 @@ async function main() {
   }
   if (!reportWritten) process.exitCode = 2;
   else process.exitCode = summary.gate.pass ? 0 : 1;
+  // A call that ignored the abort can hold the process open (a socket, a timer) after the
+  // run stopped on it, so exit once the output is flushed instead of waiting for it.
+  if (results.some((r) => r.stopped)) {
+    await Promise.all([process.stdout, process.stderr].map((s) => new Promise((done) => s.write('', done))));
+    process.exit();
+  }
 }
 
 main().catch((err) => {

@@ -54,12 +54,24 @@ export function summarize(results, { minPassRate = MIN_PASS_RATE } = {}) {
         + `add an "expect" rule or run an LLM judge: ${criticalUnchecked.join(', ')}`,
     );
   }
+  // A call ignored the abort for so long that runSuite stopped the run: the cases it skipped
+  // say nothing about the agent, so no pass rate or critical set can make that run green.
+  const stopped = results.filter((r) => r.stopped).map((r) => r.id);
+  if (stopped.length) {
+    reasons.push(`the run stopped on a stuck call; case(s) not fully run: ${stopped.join(', ')}`);
+  }
   if (results.length && passRate < minPassRate) {
     reasons.push(`pass rate ${pct(passRate)} is below the minimum ${pct(minPassRate)}`);
   }
 
   // Not gate failures, but a green run that proves less than it seems.
   const warnings = [];
+  if (stopped.length) {
+    warnings.push(
+      'an agent or judge call ignored the abort and was still running 2 x timeout after its timeout, '
+        + `so the run stopped with ${stopped.length} case(s) not fully run; that call may still be running`,
+    );
+  }
   if (results.length && !critical.length) {
     warnings.push('no critical cases selected, so only the pass rate gates this run');
   }

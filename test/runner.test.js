@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { runCase, runSuite, combineTrials, normalizeOutput, isTransient, retryDelay } from '../src/runner.js';
+import { summarize } from '../src/report.js';
 
 const scenario = (extra = {}) => ({ id: 's1', category: 'c', message: 'hi', expect: { anyTool: false }, ...extra });
 const okAgent = async () => ({ reply: 'hello', toolCalls: [] });
@@ -388,6 +389,101 @@ test('a timed-out call that ignores the abort past one more timeout is reported 
   const r = await runCase(scenario(), { agent: () => new Promise(() => {}), timeoutMs: 20, retries: 0 });
   assert.equal(r.status, 'error');
   assert.match(r.error, /timed out after 20 ms and did not stop within 20 ms/);
+});
+
+/** An agent that ignores the abort for `ms` (forever when omitted), counting its calls per case. */
+function ignoringAgent(ms) {
+  const stats = { calls: 0, inFlight: 0, maxInFlight: 0, perCase: new Map(), overlapSameCase: false };
+  const agent = async ({ message }) => {
+    stats.calls += 1;
+    stats.inFlight += 1;
+    stats.maxInFlight = Math.max(stats.maxInFlight, stats.inFlight);
+    const mine = (stats.perCase.get(message) ?? 0) + 1;
+    stats.perCase.set(message, mine);
+    if (mine > 1) stats.overlapSameCase = true;
+    try {
+      await new Promise((r) => { if (ms !== undefined) setTimeout(r, ms); });
+      return { reply: 'late' };
+    } finally {
+      stats.inFlight -= 1;
+      stats.perCase.set(message, stats.perCase.get(message) - 1);
+    }
+  };
+  return { agent, stats };
+}
+const bankOf = (n) => Array.from({ length: n }, (_, i) => scenario({ id: `c${i}`, message: `m${i}` }));
+
+test('an agent that never stops holds its slot, then stops the run instead of hanging it', async () => {
+  // The reviewer's probe: before the fix this had 12 calls in flight with concurrency 1.
+  const { agent, stats } = ignoringAgent();
+  const started = performance.now();
+  const results = await runSuite(bankOf(4), {
+    agent, concurrency: 1, trials: 3, timeoutMs: 50, retries: 2, retryDelayMs: 0, retryOnTimeout: true,
+  });
+  const elapsed = performance.now() - started;
+  assert.equal(stats.maxInFlight, 1);
+  assert.equal(stats.calls, 1, 'nothing starts next to the stuck call');
+  assert.equal(stats.overlapSameCase, false);
+  assert.ok(elapsed < 2000, `the run terminates (${Math.round(elapsed)} ms)`);
+  const [first, ...rest] = results;
+  assert.equal(first.status, 'error');
+  assert.equal(first.stopped, true);
+  assert.match(first.error, /did not stop within 50 ms of the abort; not retried; 2 of 3 trials not run, agent stuck/);
+  for (const r of rest) {
+    assert.equal(r.status, 'error');
+    assert.equal(r.stopped, true);
+    assert.equal(r.attempts, 0);
+    assert.deepEqual(r.trials, { run: 0, passed: 0 });
+    assert.match(r.error, /^not run, agent stuck: a call was still running 100 ms after it timed out/);
+  }
+  const s = summarize(results, { minPassRate: 0 });
+  assert.equal(s.gate.pass, false);
+  assert.match(s.gate.reasons.join('\n'), /the run stopped on a stuck call; case\(s\) not fully run: c0, c1, c2, c3/);
+  assert.match(s.warnings.join('\n'), /ignored the abort .* so the run stopped with 4 case\(s\) not fully run/);
+});
+
+test('with several slots, calls never exceed concurrency and the run still terminates', async () => {
+  const { agent, stats } = ignoringAgent();
+  const results = await runSuite(bankOf(6), { agent, concurrency: 2, trials: 2, timeoutMs: 50, retries: 0 });
+  assert.equal(stats.maxInFlight, 2);
+  assert.equal(stats.overlapSameCase, false);
+  assert.ok(results.every((r) => r.status === 'error' && r.stopped));
+  assert.equal(results.filter((r) => r.attempts === 0).length, 4, 'four cases never started');
+});
+
+test('a stuck call that stops within the hold frees its slot and the run goes on', async () => {
+  // Timeout at 200 ms, reported as stuck at 400 ms, slot held until 600 ms: a 500 ms call
+  // stops 100 ms inside the hold, so the next trial starts after it and nothing overlaps.
+  const { agent, stats } = ignoringAgent(500);
+  const results = await runSuite(bankOf(2), { agent, concurrency: 1, trials: 2, timeoutMs: 200, retries: 0 });
+  assert.equal(stats.calls, 4);
+  assert.equal(stats.maxInFlight, 1);
+  assert.equal(stats.overlapSameCase, false);
+  for (const r of results) {
+    assert.equal(r.status, 'error');
+    assert.equal(r.stopped, undefined);
+    assert.deepEqual(r.trials, { run: 2, passed: 0 });
+    assert.match(r.error, /did not stop within 200 ms of the abort; not retried$/);
+  }
+});
+
+test('a run stopped after some trials passed is still an error, never a pass', async () => {
+  let n = 0;
+  const agent = () => (++n === 2 ? new Promise(() => {}) : Promise.resolve({ reply: 'ok' }));
+  const [r] = await runSuite([scenario({ critical: true })], { agent, trials: 5, timeoutMs: 30, retries: 0 });
+  assert.equal(r.status, 'error');
+  assert.equal(r.stopped, true);
+  assert.deepEqual(r.trials, { run: 2, passed: 1 });
+  assert.match(r.error, /3 of 5 trials not run, agent stuck/);
+});
+
+test('a judge that ignores the abort holds the slot and stops the run too', async () => {
+  const judge = () => new Promise(() => {});
+  const results = await runSuite(bankOf(3).map((s) => ({ ...s, rubric: 'r' })), {
+    agent: okAgent, judge, concurrency: 1, timeoutMs: 30, retries: 0,
+  });
+  assert.match(results[0].verdict.reason, /judge timed out after 30 ms and did not stop/);
+  assert.ok(results.slice(1).every((r) => r.attempts === 0 && r.stopped));
 });
 
 test('normalizeOutput keeps a tool result when the agent reports one', () => {

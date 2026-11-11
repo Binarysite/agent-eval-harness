@@ -120,6 +120,11 @@ export interface CaseResult {
   trials?: { run: number; passed: number };
   /** Set by runSuite: the trials did not all end the same way. */
   flaky?: boolean;
+  /**
+   * Set by runSuite when the run stopped, on a call still running 2 x timeoutMs after its timeout,
+   * before every trial of this case ran. Such a case is an `error` and fails the gate.
+   */
+  stopped?: boolean;
 }
 
 export interface RunOptions {
@@ -137,8 +142,9 @@ export interface RunOptions {
   retryDelayMs?: number;
   /**
    * Also retry a call that timed out, once it has stopped (default false). A timed-out call is
-   * always waited for, up to one more timeout, so calls never overlap unless an agent ignores the
-   * abort for longer than that.
+   * waited for up to one more timeout; one still running then is reported as stuck and not retried.
+   * In runSuite its slot stays busy until it stops, so calls never exceed `concurrency` and trials of
+   * one case never overlap; one still running 2 x timeoutMs after its timeout stops the run.
    */
   retryOnTimeout?: boolean;
   /** Tool name the `handoff` rule looks for (default `handoff_to_human`). */
