@@ -339,13 +339,13 @@ function overlapCounter(ms) {
 }
 
 test('a timed-out call is not retried by default, so calls never overlap', async () => {
-  const { agent, stats } = overlapCounter(120);
-  const r = await runCase(scenario(), { agent, timeoutMs: 50, retries: 2, retryDelayMs: 0 });
+  const { agent, stats } = overlapCounter(100);
+  const r = await runCase(scenario(), { agent, timeoutMs: 70, retries: 2, retryDelayMs: 0 });
   assert.equal(r.status, 'error');
-  assert.match(r.error, /timed out after 50 ms/);
+  assert.match(r.error, /timed out after 70 ms$/);
   assert.equal(stats.calls, 1);
   assert.equal(stats.maxInFlight, 1);
-  await new Promise((r) => setTimeout(r, 100));
+  assert.equal(stats.inFlight, 0, 'the timed-out call has stopped before runCase returns');
 });
 
 test('with retryOnTimeout, a retry waits until the timed-out call has settled', async () => {
@@ -363,6 +363,31 @@ test('with retryOnTimeout, a call that ignores the abort past the grace period i
   assert.equal(r.status, 'error');
   assert.equal(calls, 1);
   assert.match(r.error, /did not stop/);
+});
+
+test('a timed-out call that is not retried still waits for it to stop, so concurrency holds', async () => {
+  // Every call ignores the abort and runs 130 ms against a 100 ms timeout, so it stops
+  // 70 ms inside the grace period: a margin wide enough for a slow CI runner.
+  const { agent, stats } = overlapCounter(130);
+  const cases = ['a', 'b', 'c', 'd'].map((id) => scenario({ id }));
+  const results = await runSuite(cases, { agent, concurrency: 1, timeoutMs: 100, retries: 0 });
+  assert.ok(results.every((r) => r.status === 'error' && /timed out after 100 ms$/.test(r.error)));
+  assert.equal(stats.calls, 4);
+  assert.equal(stats.maxInFlight, 1);
+});
+
+test('with trials, a hung agent never has two calls for one case in flight', async () => {
+  const { agent, stats } = overlapCounter(130);
+  const [r] = await runSuite([scenario()], { agent, trials: 3, timeoutMs: 100, retries: 1, retryDelayMs: 0 });
+  assert.equal(r.status, 'error');
+  assert.equal(stats.calls, 3);
+  assert.equal(stats.maxInFlight, 1);
+});
+
+test('a timed-out call that ignores the abort past one more timeout is reported as stuck', async () => {
+  const r = await runCase(scenario(), { agent: () => new Promise(() => {}), timeoutMs: 20, retries: 0 });
+  assert.equal(r.status, 'error');
+  assert.match(r.error, /timed out after 20 ms and did not stop within 20 ms/);
 });
 
 test('normalizeOutput keeps a tool result when the agent reports one', () => {

@@ -6,6 +6,15 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- A hung agent could exceed the concurrency limit. A timed-out call that was not retried
+  returned at once while the agent kept running, so the next trial or case started next to
+  it: with an agent ignoring the abort, `--trials 3` had 3 calls in flight for one case and
+  `--concurrency 1` with 4 cases had 4. A timed-out call is now always waited for, up to one
+  more timeout; one still running after that is reported as stuck. A hung case can now take
+  up to twice `--timeout`.
+
 ## [0.4.0] - 2026-11-11
 
 ### Added
