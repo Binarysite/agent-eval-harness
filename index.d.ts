@@ -135,7 +135,11 @@ export interface RunOptions {
   timeoutMs?: number;
   /** Base of the exponential backoff between retries (default 500). */
   retryDelayMs?: number;
-  /** Also retry a call that timed out, once it has stopped (default false). Calls never overlap. */
+  /**
+   * Also retry a call that timed out, once it has stopped (default false). A timed-out call is
+   * always waited for, up to one more timeout, so calls never overlap unless an agent ignores the
+   * abort for longer than that.
+   */
   retryOnTimeout?: boolean;
   /** Tool name the `handoff` rule looks for (default `handoff_to_human`). */
   handoffTool?: string;

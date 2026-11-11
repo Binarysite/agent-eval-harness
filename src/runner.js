@@ -224,9 +224,11 @@ async function settlesWithin(promise, ms) {
 
 /**
  * Call `fn` with a timeout, retrying transient failures up to `retries` times.
- * Calls never overlap: a call that timed out is retried only with
- * `retryOnTimeout`, and only after it has stopped, waiting at most another
- * `timeoutMs` for that.
+ * A call that timed out is waited for, up to another `timeoutMs`, before this
+ * returns or retries, so neither a retry nor the next trial or case starts
+ * next to it and the concurrency limit holds. Calls overlap only when one
+ * ignores the abort for longer than that; it is then reported as stuck and not
+ * retried. A timed-out call is retried only with `retryOnTimeout`.
  */
 async function withRetries(fn, { retries, timeoutMs, retryDelayMs, retryOnTimeout, label }) {
   let attempts = 0;
@@ -235,14 +237,14 @@ async function withRetries(fn, { retries, timeoutMs, retryDelayMs, retryOnTimeou
     try {
       return { value: await withTimeout(fn, timeoutMs, label), attempts };
     } catch (error) {
-      if (attempts > retries || !isTransient(error)) return { error, attempts };
       if (error.settled) {
-        if (!retryOnTimeout) return { error, attempts };
         if (!(await settlesWithin(error.settled, timeoutMs))) {
           const stuck = new Error(`${error.message} and did not stop within ${timeoutMs} ms of the abort; not retried`);
           return { error: stuck, attempts };
         }
+        if (!retryOnTimeout) return { error, attempts };
       }
+      if (attempts > retries || !isTransient(error)) return { error, attempts };
       await sleep(retryDelay(error, attempts, retryDelayMs));
     }
   }

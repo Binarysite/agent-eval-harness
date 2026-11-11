@@ -41,14 +41,18 @@ To get this from your own agent, throw an `Error` with a numeric `status` for
 HTTP failures, add `retryAfterMs` if the server sent `Retry-After`, and set
 `retryable: false` on an error that would repeat.
 
-**A timed-out call is not retried unless you ask, and calls never overlap.** A
+**A timed-out call is not retried unless you ask, and is waited for.** A
 timeout aborts the signal, but it cannot stop code that ignores the signal, so a
 retry started at once would run next to the call it replaces: with a 50 ms
 timeout, two retries and a 120 ms agent, three calls for one case were in flight
-together, each billed. So a timeout ends the case as `error` by default. With
-`--retry-on-timeout` (`retryOnTimeout`) the retry waits until the timed-out call
-has settled, up to one more `--timeout`; a call still running after that is
-reported and not retried. Raise `--timeout` (default 10 s) for a real tool loop
+together, each billed. The same happened between cases: with `--concurrency 1`
+and four hung cases, four calls were in flight. So a timed-out call is always
+waited for, up to one more `--timeout`, before the case retries, ends or hands
+its slot to the next trial or case; a call still running after that is reported
+as stuck and not retried, and only then can calls overlap. A timeout ends the
+case as `error` by default; with `--retry-on-timeout` (`retryOnTimeout`) it is
+retried once the call has settled. A hung case therefore takes up to twice
+`--timeout`. Raise `--timeout` (default 10 s) for a real tool loop
 or an LLM judge.
 A retry reruns the whole case from the agent call on, every tool call in it
 included, and so does each of `--trials`. Tools with side effects (a refund, an

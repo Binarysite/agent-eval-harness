@@ -47,8 +47,9 @@ const HELP = `Usage: agent-eval -s <scenarios.json> -a <agent.js> [options]
       --critical            only critical cases
       --concurrency <n>     cases in flight at once (default ${DEFAULTS.concurrency})
       --retries <n>         retries on network errors, 429 and 5xx (default ${DEFAULTS.retries})
-      --retry-on-timeout    also retry a call that timed out, once it has stopped (it waits
-                            one more timeout for that; calls never overlap)
+      --retry-on-timeout    also retry a call that timed out, once it has stopped. A timed-out
+                            call is always waited for, up to one more timeout, so calls never
+                            overlap unless an agent ignores the abort for longer than that
       --trials <k>          run each case k times; mixed results mark it flaky and a
                             critical case must pass k/k (default ${DEFAULTS.trials})
       --timeout <ms>        per call timeout for agent and judge (default ${DEFAULTS.timeout})
