@@ -34,7 +34,7 @@ test('a file that is not a report is rejected by name', () => {
   );
 });
 
-test('warns when the two runs used a different judge, agent, bank or commit', () => {
+test('warns when the two runs used a different judge, agent or bank', () => {
   const meta = { judgeModel: 'j1', agentModel: null, scenariosSha256: 'aaa', gitSha: 'c1' };
   const before = { ...report(1, ['a', 'pass']), meta };
   const after = { ...report(1, ['a', 'pass']), meta: { ...meta, judgeModel: 'j2', scenariosSha256: 'bbb' } };
@@ -46,6 +46,19 @@ test('warns when the two runs used a different judge, agent, bank or commit', ()
   assert.match(formatComparison(c), /WARNING: judgeModel differs between the runs: j1 -> j2/);
   assert.deepEqual(compareReports(before, before).warnings, []);
   assert.deepEqual(compareReports(report(1), report(1)).warnings, [], 'reports without meta compare quietly');
+});
+
+test('a different commit is an info line, not a warning: comparing two commits is the point', () => {
+  const sha = (c) => c.repeat(40);
+  const before = { ...report(1, ['a', 'pass']), meta: { gitSha: sha('a') } };
+  const after = { ...report(1, ['a', 'pass']), meta: { gitSha: sha('b') } };
+  const c = compareReports(before, after);
+  assert.deepEqual(c.warnings, []);
+  assert.deepEqual(c.notes, [`commits: ${sha('a').slice(0, 12)} -> ${sha('b').slice(0, 12)}`]);
+  const text = formatComparison(c);
+  assert.match(text, /^commits: a{12} -> b{12}$/m);
+  assert.doesNotMatch(text, /WARNING/);
+  assert.deepEqual(compareReports(before, before).notes, []);
 });
 
 test('warns when the two runs selected different cases or ran a different number of trials', () => {

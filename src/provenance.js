@@ -3,8 +3,10 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 
 /**
- * What makes two reports comparable: the same judge and agent models, the same
- * scenario bank and the same code. `compare` warns when any of these differ.
+ * What `compare` reads from each report's meta. A different judge or agent model
+ * or scenario bank is a warning: a status change may come from the setup. A
+ * different commit is expected, since comparing two commits is the point, so
+ * `compare` prints it as an info line.
  */
 export const PROVENANCE_KEYS = Object.freeze(['judgeModel', 'agentModel', 'scenariosSha256', 'gitSha']);
 

@@ -74,8 +74,10 @@ another provider, reuse `JUDGE_SYSTEM`, `buildJudgePrompt` and `parseVerdict`.
 
 **Reports carry their provenance.** Each report's `meta` records `judgeModel`,
 `agentModel` (when the agent function has a `model` property, else `null`), the
-bank's `scenariosSha256` and the `gitSha`, and `compare` warns when any of them
-differ, because a status change between two setups may come from the setup.
+bank's `scenariosSha256` and the `gitSha`. `compare` warns when the models or
+the bank differ, because a status change between two setups may come from the
+setup, and prints a different commit as an info line, since comparing two
+commits is what it is for.
 Keys are read from the environment only and never written to the report.
 
 **The CI summary is append-only and leaves the replies out.** `--md` appends to the
@@ -100,7 +102,11 @@ optional LLM judges. TypeScript is a dev dependency only. `npm run typecheck`
 checks, in non-strict mode, the JSDoc in `src` and `bin` and that the
 implementation matches the hand-written declarations in `index.d.ts`.
 `npm run typecheck:types` checks `index.d.ts` on its own with `--strict`.
-CI runs both.
+CI runs both. Generating the declarations from the JSDoc instead
+(`tsc --declaration --emitDeclarationOnly --allowJs`) was tried: it gives 11
+files with 38 `any` where `index.d.ts` has none, because the internal helpers
+are loosely typed. The hand-written file stays the contract, and the conform
+check keeps the code honest to it.
 
 ## Known limits
 
@@ -162,7 +168,8 @@ src/runner.js               retries, timeouts, bounded concurrency, judge call
 src/report.js               summary, critical gate, console and JSON output
 src/judges/mock.js          deterministic offline judge
 src/judges/llm.js           Anthropic and OpenAI-compatible judges over fetch
-src/http.js                 shared fetch call and key redaction for judges and example
+src/http.js                 shared fetch call for the judges and the example agent
+src/util.js                 percentages, token sums, key redaction (imported, never importing)
 src/markdown.js             Markdown summary of a run, for a CI job page
 src/compare.js              case-by-case diff of two reports
 src/provenance.js           models, bank hash and git commit recorded in each report

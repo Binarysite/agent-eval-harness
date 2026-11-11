@@ -38,8 +38,13 @@ export function compareReports(before, after, { beforeLabel = 'before', afterLab
   }
   // A status change between two different setups may come from the setup, not the agent.
   const meta = (report, key) => report.meta?.[key] ?? null;
-  const warnings = PROVENANCE_KEYS.filter((key) => meta(before, key) !== meta(after, key))
+  const differs = PROVENANCE_KEYS.filter((key) => meta(before, key) !== meta(after, key));
+  const warnings = differs.filter((key) => key !== 'gitSha')
     .map((key) => `${key} differs between the runs: ${meta(before, key)} -> ${meta(after, key)}`);
+  const short = (sha) => (sha ? String(sha).slice(0, 12) : 'none');
+  const notes = differs.includes('gitSha')
+    ? [`commits: ${short(meta(before, 'gitSha'))} -> ${short(meta(after, 'gitSha'))}`]
+    : [];
   // A different selection turns every case left out into "pass -> missing".
   const setup = {
     filters: (report) => JSON.stringify(report.meta?.filters ?? null),
@@ -54,6 +59,7 @@ export function compareReports(before, after, { beforeLabel = 'before', afterLab
     changes,
     regressions: changes.filter((change) => change.from === 'pass'),
     passRate: { before: before.summary.passRate, after: after.summary.passRate },
+    notes,
     warnings,
   };
 }
@@ -67,6 +73,7 @@ export function formatComparison(comparison) {
   if (!lines.length) lines.push('No case changed status.');
   const { before, after } = comparison.passRate;
   lines.push('', `Pass rate ${pct(before)} -> ${pct(after)}  regressions ${comparison.regressions.length}`);
+  lines.push(...(comparison.notes ?? []));
   for (const w of comparison.warnings ?? []) lines.push(`WARNING: ${w}`);
   return lines.join('\n');
 }
