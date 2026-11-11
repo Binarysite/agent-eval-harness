@@ -29,6 +29,13 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   before `RESULT: PASS`. The console and the Markdown summary now warn, for example
   `23 rubric(s) not graded: judge mock or none, or the judge failed`.
 
+### Documentation
+
+- The judge is described as measured, not calibrated: rules plus `deepseek-reasoner` caught
+  25 of 25 bad replies (`deepseek-chat` 24 of 25) after a fix made in response to the same
+  labelled set. The LLM-agent run report now says its judge predates that fix and saw tool
+  calls, not their results.
+
 ## [0.4.0] - 2026-11-11
 
 ### Added

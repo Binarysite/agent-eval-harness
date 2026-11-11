@@ -119,8 +119,9 @@ it is fixed.
 and explain themselves; the judge covers what they cannot, and you never pay to grade a
 reply that already failed. *Cost:* substring rules are literal (`excludes` catches
 "Riverton", not "a town by the river"), so critical cases also need a rubric. On the
-labelled set the rules alone catch 1 of 25 bad replies and rules plus a calibrated judge
-25 of 25.
+labelled set the rules alone catch 1 of 25 bad replies; rules plus `deepseek-reasoner`
+caught 25 of 25 (`deepseek-chat` 24 of 25), after a fix made in response to this same set,
+so that is measured, not independent evidence.
 
 **Retries for infrastructure, never for answers.** A wrong reply or a "no" from the judge
 is reported at once, because retrying until green hides the flakiness an eval exists to
@@ -204,19 +205,21 @@ The other three rows describe those projects as their READMEs did on 2026-10-09.
 
 ## Limits
 
-- **The judge is calibrated on one small set, with one provider.** On 48 labelled replies,
+- **The judge is measured on one small set, with one provider.** On 48 labelled replies,
   graded 5 times each, `deepseek-reasoner` caught 25 of 25 bad replies and failed 1 of 23
   good ones (kappa 0.958), `deepseek-chat` 24 of 25 and 1 of 23 (kappa 0.917), at USD 0.021
   and 0.011 per 100 verdicts; the rules alone caught 1 of the 25. A first run found a blind
   spot: the judge saw tool calls but not their results, and passed a misquoted lookup 5 of 5
-  times. Tool calls now carry results, and that reply fails 5 of 5. One labeller, wide
-  intervals, and both names answered as the same DeepSeek model. See the
+  times. Tool calls now carry results, and that reply fails 5 of 5; the 25 of 25 is from
+  after that fix, made in response to this same set. One labeller, wide intervals, and both
+  names answered as the same DeepSeek model. See the
   [calibration report](reports/calibration/2026-11-11-deepseek.md).
   No Anthropic judge run is published; CI and the outputs above use the mock judge, which
   does not read rubrics.
 - **One public LLM-agent run.** The example tool-use agent on `deepseek-chat`, 5 trials:
   19 of 24 cases and 5 of 8 critical ones passed, pass^5 16 of 24, USD 0.017 per suite run.
-  The gate failed on a real prompt bug and on rules stricter than the rubric. See the
+  The gate failed on a real prompt bug and on rules stricter than the rubric. Its judge
+  predates the fix above: it saw tool calls, not their results. See the
   [run report](reports/llm-agent-run/2026-11-11-deepseek-chat.md).
 - **One message per scenario.** There is no conversation format: a scripted history goes
   in `context` and your agent replays it, as `examples/starter` does. Tool rules check

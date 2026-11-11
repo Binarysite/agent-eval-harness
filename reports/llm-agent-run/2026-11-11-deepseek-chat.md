@@ -1,8 +1,13 @@
 # LLM agent run, 2026-11-11
 
 `examples/llm-agent/agent.js`, a tool-use agent over the Messages API, ran the 24 sticker-shop
-scenarios five times each, with a real model as the agent and the calibrated `deepseek-chat`
-judge ([calibration report](../calibration/2026-11-11-deepseek.md)).
+scenarios five times each, with a real model as the agent and the `deepseek-chat` judge
+measured in the [calibration report](../calibration/2026-11-11-deepseek.md).
+
+Note: this run used the judge from before tool results were shown to it (harness commit
+9a053dc, before ad5f7f7). Its judge saw which tools the agent called, not what they returned,
+which is the first-run setup of the calibration report (24 of 25 bad replies caught, 2 of 23
+good ones failed), not the 25 of 25 measured after the fix.
 
 | | |
 |---|---|
