@@ -20,6 +20,7 @@ import {
   runProvenance,
 } from '../src/index.js';
 import { RUN_DEFAULTS } from '../src/runner.js';
+import { MAX_TIMEOUT_MS } from '../src/util.js';
 import { MIN_PASS_RATE } from '../src/report.js';
 import { HANDOFF_TOOL } from '../src/expectations.js';
 
@@ -163,7 +164,7 @@ async function main() {
     concurrency: toNumber('concurrency', args.concurrency, { min: 1, integer: true }),
     retries: toNumber('retries', args.retries, { integer: true }),
     trials: toNumber('trials', args.trials, { min: 1, integer: true }),
-    timeoutMs: toNumber('timeout', args.timeout, { min: 1, max: 2_147_483_647 }),
+    timeoutMs: toNumber('timeout', args.timeout, { min: 1, max: MAX_TIMEOUT_MS }),
     retryOnTimeout: args['retry-on-timeout'],
     handoffTool: args['handoff-tool'],
   };

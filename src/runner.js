@@ -1,5 +1,6 @@
 import { setTimeout as sleep } from 'node:timers/promises';
 import { checkExpectations } from './expectations.js';
+import { MAX_TIMEOUT_MS, sumUsage } from './util.js';
 
 /**
  * @typedef {import('./scenarios.js').Scenario} Scenario
@@ -76,9 +77,6 @@ import { checkExpectations } from './expectations.js';
 export const RUN_DEFAULTS = Object.freeze({
   concurrency: 4, trials: 1, retries: 1, timeoutMs: 10_000, retryDelayMs: 500, retryOnTimeout: false,
 });
-
-// setTimeout fires at once for anything longer than this.
-const MAX_TIMEOUT_MS = 2_147_483_647;
 
 /**
  * Reject options that would make the run misbehave instead of fail: a NaN
@@ -171,26 +169,6 @@ export function readUsage(raw, who) {
     throw new Error(`${who} usage must be { inputTokens: number, outputTokens: number }`);
   }
   return { inputTokens: u.inputTokens, outputTokens: u.outputTokens };
-}
-
-/**
- * Add up token counts per role. Returns undefined when nothing reported any,
- * so a run without usage shows no token line at all.
- * @param {Array<UsageByRole | undefined>} list
- * @returns {UsageByRole | undefined}
- */
-export function sumUsage(list) {
-  let total;
-  for (const usage of list) {
-    for (const role of /** @type {const} */ (['agent', 'judge'])) {
-      if (!usage?.[role]) continue;
-      total ??= {};
-      const t = (total[role] ??= { inputTokens: 0, outputTokens: 0 });
-      t.inputTokens += usage[role].inputTokens;
-      t.outputTokens += usage[role].outputTokens;
-    }
-  }
-  return total;
 }
 
 const NETWORK_CODES = new Set([

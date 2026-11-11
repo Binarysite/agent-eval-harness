@@ -3,23 +3,6 @@
  * fetch so the package keeps zero runtime dependencies.
  */
 
-// Key shapes of the providers a judge or agent is likely to call, masked ones included
-// ("sk-ab***yz"): OpenAI and Anthropic, xAI, Google, GitHub.
-const KEY_SHAPES = /\b(?:sk-|xai-)[\w*-]+|\bAIza[\w-]{10,}|\bgh[pousr]_\w{10,}|\bgithub_pat_\w+/g;
-
-/**
- * Remove the given secrets, anything shaped like a provider key and the token
- * after `Bearer` from text that may end up in the console or the report.
- * @param {string} text
- * @param {string[]} [secrets]
- * @returns {string}
- */
-export function redactSecrets(text, secrets = []) {
-  let out = String(text);
-  for (const secret of secrets) if (secret) out = out.split(secret).join('[redacted]');
-  return out.replace(KEY_SHAPES, '[redacted]').replace(/\b(Bearer)\s+(?!\[redacted\])\S+/gi, '$1 [redacted]');
-}
-
 /**
  * The message of a non-2xx answer. A provider can echo a masked key in its error
  * body, so the body is never copied: only the standard `error.type` survives
