@@ -85,6 +85,8 @@ test('the README and docs download, run and depend on one tag, and the starter f
   assert.ok(refs.length >= 4, `found ${refs.length} references`);
   assert.deepEqual([...new Set(refs)], [refs[0]], 'one tag everywhere');
   assert.match(refs[0], /^v\d+\.\d+\.\d+$/, 'a release tag, not a branch');
+  const actionTag = readme.match(/uses: Binarysite\/agent-eval-harness@[0-9a-f]{40} # (v[\d.]+)/)?.[1];
+  assert.equal(actionTag, refs[0], 'the action example is pinned to the same release');
   for (const [, file] of readme.matchAll(/agent-eval-harness\/v[\d.]+\/(examples\/starter\/[\w.]+)/g)) {
     await assert.doesNotReject(readText(file), `${file} exists`);
   }
