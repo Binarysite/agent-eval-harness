@@ -40,10 +40,16 @@ one check JSON Schema cannot express: unique ids.
 | `excludes: [..]` | the reply contains none of the phrases |
 
 `includesAny` and `excludes` compare what a reader sees: both the reply and the
-phrase go through NFKC (fullwidth letters become ASCII), lose every
-default-ignorable code point (zero-width characters, bidi marks and overrides,
-tag characters, variation selectors, soft hyphens, fillers), have every run of
-whitespace, line breaks included, folded to one space, and are lowercased.
+phrase lose every default-ignorable code point (zero-width characters, bidi
+marks and overrides, tag characters, variation selectors, soft hyphens), go
+through NFKC (fullwidth letters become ASCII, a letter and its combining accent
+compose, so `cafe` + U+034F + U+0301 still matches `café`), lose any ignorable
+NFKC produced, have U+0085 (next line), U+2800 (braille blank) and every run of
+whitespace, line breaks included, folded to one space, and are lowercased. The
+reply is read twice, with Hangul fillers dropped and with them as a space, since
+they are ignorable but show as a gap; a phrase matches either reading.
+Look-alike letters from other scripts are not folded: `excludes: ["refund"]`
+misses `rеfund` with a Cyrillic `е` (see [SECURITY.md](../SECURITY.md)).
 
 `rubric` is plain language for the LLM judge, which only runs when every rule
 passed. `context` is passed to the agent untouched. Unknown field or rule

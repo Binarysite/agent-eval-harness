@@ -12,6 +12,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   two timeouts after it timed out stops the run: the cases and trials not yet started are
   `error` (`not run, agent stuck`, `stopped: true` in the report), the summary warns and the
   gate fails (exit 1). A slot can be busy for up to three times `--timeout` on one hung call.
+- Numeric flags take decimal numbers only: `0x1`, `0b1` or `0o1` is a usage error (exit 2).
 
 ### Fixed
 
@@ -22,6 +23,21 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   stopped kept them all running. Calls in flight now never exceed `--concurrency`, trials of
   one case never overlap, and such a run ends after about three timeouts, failing the gate.
   The CLI exits even when the stuck call holds the process open.
+- `excludes` and `includesAny` missed a phrase when an invisible character sat between a
+  letter and its combining accent: `excludes: ["café"]` passed `cafe` + U+034F (or a zero
+  width joiner, or a tag character) + U+0301, because NFKC ran before the invisible
+  character was dropped and left the accent uncomposed. Invisibles are now dropped, then
+  NFKC, then dropped again.
+- U+0085 (next line) and U+2800 (braille blank) now read as a space, and a Hangul filler
+  (U+115F, U+1160, U+3164, U+FFA0) between two words reads as a space as well as nothing,
+  so `full` + U+3164 + `refund` matches `full refund`.
+- A numeric flag such as `--min-pass-rate 0x1` was read as 1: `Number()` accepts hex,
+  binary and octal. Numeric flags now take decimal numbers only (exit 2 otherwise).
+
+### Documentation
+
+- Look-alike letters from other scripts (a Cyrillic `е` for a Latin `e`) are documented as
+  a known limit of `excludes` in SECURITY.md, the README and docs/SCENARIOS.md.
 
 ## [0.4.1] - 2026-11-11
 

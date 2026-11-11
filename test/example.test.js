@@ -115,6 +115,11 @@ test('CLI setup errors exit 2', async (t) => {
     [['-s', SCENARIOS, '-a', AGENT, '--min-pass-rate', ''], /--min-pass-rate must be a number between 0 and 1, got ""/],
     [['-s', SCENARIOS, '-a', AGENT, '--min-pass-rate', ' \t'], /--min-pass-rate must be a number between 0 and 1/],
     [['-s', SCENARIOS, '-a', AGENT, '--concurrency', ' '], /--concurrency must be an integer/],
+    // Number('0x1') is 1: only decimal numbers are accepted.
+    [['-s', SCENARIOS, '-a', AGENT, '--min-pass-rate', '0x1'], /--min-pass-rate must be a number between 0 and 1, got "0x1"/],
+    [['-s', SCENARIOS, '-a', AGENT, '--concurrency', '0x2'], /--concurrency must be an integer/],
+    [['-s', SCENARIOS, '-a', AGENT, '--timeout', '0b101'], /--timeout must be a number/],
+    [['-s', SCENARIOS, '-a', AGENT, '--retries', '0o1'], /--retries must be an integer/],
     [['-s', SCENARIOS, '-a', AGENT, '-o', ''], /--out needs a file path/],
     [['-s', SCENARIOS, '-a', AGENT, '--md', ' '], /--md needs a file path/],
     [['-s', SCENARIOS, '-a', AGENT, '--judge', 'nope'], /unknown judge "nope"/],

@@ -19,16 +19,33 @@ import { isDeepStrictEqual } from 'node:util';
  */
 
 // Text rules compare what a reader sees, so a forbidden phrase cannot slip past a
-// plain substring match. NFKC folds fullwidth and other compatibility letters to
-// ASCII; every Default_Ignorable_Code_Point (zero-width characters, bidi marks and
-// overrides, tag characters, variation selectors, the soft hyphen, fillers...) is
-// dropped, since each renders as nothing; any run of whitespace, line breaks
-// included, becomes one space. A hand-kept list of such characters always misses one.
-const normalize = (s) => String(s)
+// plain substring match. Every Default_Ignorable_Code_Point (zero-width characters,
+// bidi marks and overrides, tag characters, variation selectors, the soft hyphen,
+// U+034F...) renders as nothing, so it is dropped; then NFKC folds fullwidth and other
+// compatibility letters to ASCII and composes a letter with its combining accent;
+// then the ignorables NFKC can produce are dropped again. Dropping only after NFKC
+// would leave "cafe" + U+034F + U+0301 uncomposed, so it would not match "café".
+// U+0085 (next line) and U+2800 (braille blank) are blank but not \s, so they become a
+// space, and any run of whitespace, line breaks included, becomes one space. A hand-kept
+// list of invisible characters always misses one. Hangul fillers are ignorable yet show
+// as a gap, so a reply is read twice, with them dropped and with them as a space, and a
+// phrase matches if it is in either reading. Look-alike letters from other scripts
+// (a Cyrillic "е" for a Latin "e") are not folded: see SECURITY.md.
+const IGNORABLE = /\p{Default_Ignorable_Code_Point}/gu;
+const HANGUL_FILLERS = /[\u115F\u1160\u3164\uFFA0]/gu;
+const fold = (s, filler) => String(s)
+  .replace(/[\u0085\u2800]/gu, ' ')
+  .replace(HANGUL_FILLERS, filler)
+  .replace(IGNORABLE, '')
   .normalize('NFKC')
-  .replace(/\p{Default_Ignorable_Code_Point}/gu, '')
+  .replace(HANGUL_FILLERS, filler)
+  .replace(IGNORABLE, '')
   .replace(/\s+/gu, ' ')
   .toLowerCase();
+const normalize = (s) => fold(s, '');
+/** Every way a reader can see `s`: with Hangul fillers dropped, and as spaces. */
+const readings = (s) => [...new Set([fold(s, ''), fold(s, ' ')])];
+const contains = (texts, phrase) => texts.some((t) => t.includes(normalize(phrase)));
 const quote = (list) => list.map((x) => JSON.stringify(x)).join(', ');
 /** A plain object: not null, not an array. */
 export const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -132,8 +149,8 @@ const RULES = {
     valid: isStringList,
     schema: STRING_LIST,
     check(phrases, out) {
-      const text = normalize(out.reply);
-      const pass = phrases.some((p) => text.includes(normalize(p)));
+      const texts = readings(out.reply);
+      const pass = phrases.some((p) => contains(texts, p));
       return {
         pass,
         detail: pass ? 'reply contains an expected phrase' : `reply contains none of: ${quote(phrases)}`,
@@ -146,8 +163,8 @@ const RULES = {
     valid: isStringList,
     schema: STRING_LIST,
     check(phrases, out) {
-      const text = normalize(out.reply);
-      const hit = phrases.filter((p) => text.includes(normalize(p)));
+      const texts = readings(out.reply);
+      const hit = phrases.filter((p) => contains(texts, p));
       return {
         pass: hit.length === 0,
         detail: hit.length ? `reply contains forbidden text: ${quote(hit)}` : 'no forbidden text in reply',
