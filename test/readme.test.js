@@ -63,3 +63,29 @@ test('README compare block matches a real compare, which exits 1', async (t) => 
   assert.equal(run.code, 1);
   assertShownIn(await readmeBlock('compare'), run.stdout);
 });
+
+const readText = (file) => readFile(join(root, file), 'utf8');
+const actionPins = (text) => new Map([...text.matchAll(/uses: (actions\/[\w-]+)@([0-9a-f]{40}) # (v[\d.]+)/g)]
+  .map(([, name, sha, version]) => [name, `${sha} # ${version}`]));
+
+test('every third-party action the README pins is pinned to the same commit as the CI', async () => {
+  const ci = actionPins(await readText('.github/workflows/ci.yml'));
+  const readme = actionPins(await readText('README.md'));
+  assert.ok(readme.size > 0, 'the README pins at least one action');
+  for (const [name, pin] of readme) assert.equal(pin, ci.get(name), `${name} in README vs ci.yml`);
+});
+
+test('the README and docs download, run and depend on one tag, and the starter files exist', async () => {
+  const readme = await readText('README.md');
+  const docs = await readText('docs/AGENTS-AND-JUDGES.md');
+  const refs = [
+    ...[...readme.matchAll(/raw\.githubusercontent\.com\/Binarysite\/agent-eval-harness\/([^/]+)\//g)].map((m) => m[1]),
+    ...[...`${readme}\n${docs}`.matchAll(/github:Binarysite\/agent-eval-harness#([\w.-]+)/g)].map((m) => m[1]),
+  ];
+  assert.ok(refs.length >= 4, `found ${refs.length} references`);
+  assert.deepEqual([...new Set(refs)], [refs[0]], 'one tag everywhere');
+  assert.match(refs[0], /^v\d+\.\d+\.\d+$/, 'a release tag, not a branch');
+  for (const [, file] of readme.matchAll(/agent-eval-harness\/v[\d.]+\/(examples\/starter\/[\w.]+)/g)) {
+    await assert.doesNotReject(readText(file), `${file} exists`);
+  }
+});
