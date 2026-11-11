@@ -120,8 +120,16 @@ const openAIUsage = (u) => (u
   ? { inputTokens: u.prompt_tokens ?? 0, outputTokens: u.completion_tokens ?? 0 }
   : undefined);
 
-/** Attach usage to a verdict only when the API reported it. */
-const withUsage = (verdict, usage) => (usage ? { ...verdict, usage } : verdict);
+/**
+ * Attach usage, and the model that answered, to a verdict when the API reported them.
+ * The served model can differ from the requested one: an alias such as `deepseek-chat`
+ * answers as whatever model the provider maps it to that day.
+ */
+const withUsage = (verdict, usage, servedModel) => ({
+  ...verdict,
+  ...(typeof servedModel === 'string' && servedModel && { servedModel }),
+  ...(usage && { usage }),
+});
 
 /** The verdict shape, sent as a JSON schema where the API supports structured outputs. */
 export const VERDICT_SCHEMA = Object.freeze({
@@ -172,10 +180,10 @@ export function createAnthropicJudge({
       { signal },
     );
     const usage = anthropicUsage(data.usage);
-    if (data.stop_reason === 'refusal') return withUsage({ pass: null, reason: 'judge refused to grade' }, usage);
+    if (data.stop_reason === 'refusal') return withUsage({ pass: null, reason: 'judge refused to grade' }, usage, data.model);
     if (data.stop_reason === 'max_tokens') throw truncated();
     const text = (data.content ?? []).filter((b) => b.type === 'text').map((b) => b.text).join('');
-    return withUsage(parseVerdict(text), usage);
+    return withUsage(parseVerdict(text), usage, data.model);
   }, { model });
 }
 
@@ -207,6 +215,6 @@ export function createOpenAICompatibleJudge({
     );
     const choice = data.choices?.[0];
     if (choice?.finish_reason === 'length') throw truncated();
-    return withUsage(parseVerdict(choice?.message?.content ?? ''), openAIUsage(data.usage));
+    return withUsage(parseVerdict(choice?.message?.content ?? ''), openAIUsage(data.usage), data.model);
   }, { model });
 }

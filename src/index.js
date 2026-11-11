@@ -5,6 +5,7 @@ export { runProvenance, gitSha } from './provenance.js';
 export { summarize, formatCase, formatSummary, buildReport } from './report.js';
 export { formatMarkdown } from './markdown.js';
 export { compareReports, formatComparison } from './compare.js';
+export { runCalibration, calibrationMetrics } from './calibration.js';
 export { createMockJudge } from './judges/mock.js';
 export {
   createAnthropicJudge,
