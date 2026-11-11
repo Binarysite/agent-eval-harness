@@ -6,6 +6,18 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-11-11
+
+### Changed
+
+Behaviour a CI job can notice when it upgrades; each is detailed under Fixed.
+
+- A hung case can take up to twice `--timeout`: the timed-out call is waited for.
+- `--md` pointing at a folder or an unwritable file now exits 2 before the run, instead of
+  running and warning after it.
+- A report that cannot be written after the run exits 2, whatever the gate said.
+- A blank value for a numeric flag is a usage error (exit 2).
+
 ### Fixed
 
 - A hung agent could exceed the concurrency limit. A timed-out call that was not retried
@@ -170,7 +182,8 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   tool-use example agent, and CI with a dependency-free lint, `npm audit` and a regression step
   that requires exactly exit 1.
 
-[Unreleased]: https://github.com/Binarysite/agent-eval-harness/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/Binarysite/agent-eval-harness/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/Binarysite/agent-eval-harness/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/Binarysite/agent-eval-harness/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/Binarysite/agent-eval-harness/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/Binarysite/agent-eval-harness/compare/v0.2.0...v0.3.0
