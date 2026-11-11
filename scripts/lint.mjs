@@ -1,5 +1,6 @@
 // Dependency-free lint: every .js/.mjs file must parse (node --check) and have no
-// tabs or trailing whitespace. Text files get the whitespace check only.
+// tabs or trailing whitespace. Text files get the whitespace check only. No file
+// may contain an em dash: the house style uses a colon, a comma or two sentences.
 import { execFileSync } from 'node:child_process';
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { join, extname } from 'node:path';
@@ -24,6 +25,7 @@ for (const file of files) {
   readFileSync(file, 'utf8').split('\n').forEach((line, i) => {
     if (/\t/.test(line)) problems.push(`${file}:${i + 1}: tab`);
     if (/[ \t]+$/.test(line)) problems.push(`${file}:${i + 1}: trailing whitespace`);
+    if (line.includes('\u2014')) problems.push(`${file}:${i + 1}: em dash`);
   });
 }
 

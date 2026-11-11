@@ -12,6 +12,16 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   its abort signal, so an immediate retry ran next to it: a 50 ms timeout, two retries and a
   120 ms agent put three billed calls in flight for one case. A timeout is now not retried by
   default; `--retry-on-timeout` (`retryOnTimeout`) retries it once the call has settled.
+- A bad `--out` path fails before the run (exit 2) instead of after it, when it discarded a
+  finished run and turned a failed gate (exit 1) into a setup error (exit 2).
+- `summarize()` rejects a `minPassRate` that is not a number from 0 to 1. `NaN` used to pass
+  every gate.
+- `excludes` and `includesAny` normalize the reply and the phrase (NFKC, no zero-width
+  characters or soft hyphens, lowercase), so "pro\u200Bduction" or fullwidth letters no longer
+  slip past a forbidden phrase.
+- `toolArgs` rejects an empty argument object, which matched any call to the tool.
+- Key redaction also covers `xai-`, `AIza`, `ghp_` and `github_pat_` keys and any `Bearer`
+  token.
 
 ### Added
 
