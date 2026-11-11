@@ -32,6 +32,11 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `schema/scenarios.schema.json`, a JSON Schema (draft 2020-12) of a scenario bank, generated
+  from the validator's own rule and field tables by `npm run schema`; a test fails when it is
+  stale and checks that it rejects what the validator rejects. A bank may now be an object
+  with `scenarios` and `$schema`, so an editor finds the schema; the examples use that form.
+  Ajv is a dev dependency for that test only; there are still no runtime dependencies.
 - The summary carries a 95% Wilson interval of the pass rate (`passRateInterval`), printed next
   to it in the console and the Markdown summary. `compare` says whether a pass-rate change is
   within noise (the two intervals overlap) or beyond it. The gate still compares the rate itself.

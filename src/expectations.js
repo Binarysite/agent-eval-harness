@@ -14,6 +14,7 @@ import { isDeepStrictEqual } from 'node:util';
  * @typedef {object} Rule
  * @property {string} expects   completes the sentence `"<key>" must ...` in validation errors
  * @property {(value: unknown) => boolean} valid
+ * @property {object} schema    the same shape as JSON Schema, for schema/scenarios.schema.json
  * @property {(value: any, out: AgentOutput, called: string[], opts: CheckOptions) => Omit<CheckResult, 'rule'>} check
  */
 
@@ -33,6 +34,10 @@ const isBoolean = (v) => typeof v === 'boolean';
 const isArgsMap = (v) => isObject(v) && Object.keys(v).length > 0
   && Object.values(v).every((args) => isObject(args) && Object.keys(args).length > 0);
 
+/** A string with at least one character that is not whitespace, as JSON Schema. */
+export const NON_EMPTY_STRING = Object.freeze({ type: 'string', pattern: '\\S' });
+const STRING_LIST = { type: 'array', minItems: 1, items: NON_EMPTY_STRING };
+
 /** True when every key in `expected` deep-equals the same key in `actual`. */
 function argsMatch(actual = {}, expected = {}) {
   return Object.entries(expected).every(([k, v]) => isDeepStrictEqual(actual[k], v));
@@ -43,6 +48,7 @@ const RULES = {
   tools: {
     expects: 'be a non-empty array of non-empty strings',
     valid: isStringList,
+    schema: STRING_LIST,
     check(names, _out, called) {
       const missing = names.filter((n) => !called.includes(n));
       return {
@@ -55,6 +61,7 @@ const RULES = {
   noTools: {
     expects: 'be a non-empty array of non-empty strings',
     valid: isStringList,
+    schema: STRING_LIST,
     check(names, _out, called) {
       const hit = names.filter((n) => called.includes(n));
       return {
@@ -67,6 +74,7 @@ const RULES = {
   anyTool: {
     expects: 'be boolean',
     valid: isBoolean,
+    schema: { type: 'boolean' },
     check(required, _out, called) {
       const pass = required ? called.length > 0 : called.length === 0;
       const ok = required ? 'called at least one tool' : 'called no tools';
@@ -80,6 +88,7 @@ const RULES = {
   handoff: {
     expects: 'be boolean',
     valid: isBoolean,
+    schema: { type: 'boolean' },
     check(required, _out, called, { handoffTool }) {
       const did = called.includes(handoffTool);
       const pass = did === required;
@@ -94,6 +103,11 @@ const RULES = {
   toolArgs: {
     expects: 'map tool names to non-empty argument objects',
     valid: isArgsMap,
+    schema: {
+      type: 'object',
+      minProperties: 1,
+      additionalProperties: { type: 'object', minProperties: 1 },
+    },
     check(spec, out) {
       const bad = Object.entries(spec).filter(
         ([name, expected]) => !out.toolCalls.some((c) => c.name === name && argsMatch(c.args, expected)),
@@ -110,6 +124,7 @@ const RULES = {
   includesAny: {
     expects: 'be a non-empty array of non-empty strings',
     valid: isStringList,
+    schema: STRING_LIST,
     check(phrases, out) {
       const text = normalize(out.reply);
       const pass = phrases.some((p) => text.includes(normalize(p)));
@@ -123,6 +138,7 @@ const RULES = {
   excludes: {
     expects: 'be a non-empty array of non-empty strings',
     valid: isStringList,
+    schema: STRING_LIST,
     check(phrases, out) {
       const text = normalize(out.reply);
       const hit = phrases.filter((p) => text.includes(normalize(p)));
@@ -136,6 +152,11 @@ const RULES = {
 
 /** Every key a scenario's `expect` block may use. Unknown keys fail validation. */
 export const EXPECTATION_KEYS = Object.freeze(Object.keys(RULES));
+
+/** The JSON Schema of each rule's value, keyed like EXPECTATION_KEYS. */
+export const EXPECTATION_SCHEMAS = Object.freeze(
+  Object.fromEntries(Object.entries(RULES).map(([key, rule]) => [key, rule.schema])),
+);
 
 /**
  * Check that `value` has the shape rule `key` accepts.

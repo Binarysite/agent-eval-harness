@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { isObject, validateExpectation } from './expectations.js';
+import { NON_EMPTY_STRING, isObject, validateExpectation } from './expectations.js';
 
 /**
  * @typedef {object} Scenario
@@ -12,7 +12,17 @@ import { isObject, validateExpectation } from './expectations.js';
  * @property {string} [rubric]      Plain-language criteria for the LLM judge.
  */
 
-const FIELDS = new Set(['id', 'category', 'message', 'critical', 'context', 'expect', 'rubric']);
+/** Every field a scenario may have, with its JSON Schema (`expect` is filled in by schema.js). */
+export const FIELD_SCHEMAS = Object.freeze({
+  id: { ...NON_EMPTY_STRING, description: 'Stable, unique id (used in reports and diffs).' },
+  category: { ...NON_EMPTY_STRING, description: 'Grouping for filters and per-category scores.' },
+  message: { ...NON_EMPTY_STRING, description: 'What the user says to the agent.' },
+  critical: { type: 'boolean', description: 'A failing critical case fails the whole run.' },
+  context: { type: 'object', description: 'Passed to the agent as-is (user id, role, a scripted history).' },
+  expect: { type: 'object', description: 'Rule-based expectations.' },
+  rubric: { ...NON_EMPTY_STRING, description: 'Plain-language criteria for the LLM judge.' },
+});
+const FIELDS = new Set(Object.keys(FIELD_SCHEMAS));
 
 /**
  * Problems with one scenario, each prefixed with `at`.
@@ -46,14 +56,32 @@ function validateScenario(s, at) {
 }
 
 /**
+ * A bank is an array of scenarios, or an object with `scenarios` and an optional
+ * `$schema` (so an editor can find schema/scenarios.schema.json).
+ * @param {unknown} raw
+ * @returns {unknown[]}
+ */
+function unwrapBank(raw) {
+  if (Array.isArray(raw)) return raw;
+  const bank = /** @type {any} */ (raw);
+  if (!isObject(bank) || !Array.isArray(bank.scenarios)) {
+    throw new Error('must contain a JSON array of scenarios, or an object with a "scenarios" array');
+  }
+  const extra = Object.keys(bank).filter((k) => k !== 'scenarios' && k !== '$schema');
+  if (extra.length) throw new Error(`unknown key "${extra[0]}" next to "scenarios" (only "$schema" may be there)`);
+  if (bank.$schema !== undefined && typeof bank.$schema !== 'string') throw new Error('"$schema" must be a string');
+  return bank.scenarios;
+}
+
+/**
  * Validate a scenario bank. Collects every problem instead of stopping at the
  * first, so a broken bank is fixed in one pass. Unknown fields and expectation
  * keys are errors: a typo like `exclude` must not silently turn into "no check".
- * @param {unknown} bank
+ * @param {unknown} raw  an array of scenarios, or `{ $schema?, scenarios }`
  * @returns {Scenario[]}
  */
-export function validateScenarios(bank) {
-  if (!Array.isArray(bank)) throw new Error('Scenario file must contain a JSON array');
+export function validateScenarios(raw) {
+  const bank = /** @type {any[]} */ (unwrapBank(raw));
   const errors = [];
   const seen = new Set();
   for (const [i, s] of bank.entries()) {
@@ -85,7 +113,6 @@ export async function loadScenarios(file) {
   } catch (err) {
     throw new Error(`${file}: invalid JSON: ${err.message}`);
   }
-  if (!Array.isArray(bank)) throw new Error(`${file}: must contain a JSON array of scenarios`);
   try {
     return validateScenarios(bank);
   } catch (err) {

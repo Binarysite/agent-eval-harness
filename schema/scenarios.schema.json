@@ -1,0 +1,168 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Binarysite/agent-eval-harness/blob/main/schema/scenarios.schema.json",
+  "title": "agent-eval-harness scenario bank",
+  "description": "An array of scenarios, or an object with \"scenarios\" and an optional \"$schema\". Scenario ids must also be unique, which the harness checks and this schema cannot.",
+  "anyOf": [
+    {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/scenario"
+      }
+    },
+    {
+      "type": "object",
+      "properties": {
+        "$schema": {
+          "type": "string"
+        },
+        "scenarios": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/scenario"
+          }
+        }
+      },
+      "required": [
+        "scenarios"
+      ],
+      "additionalProperties": false
+    }
+  ],
+  "$defs": {
+    "scenario": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "\\S",
+          "description": "Stable, unique id (used in reports and diffs)."
+        },
+        "category": {
+          "type": "string",
+          "pattern": "\\S",
+          "description": "Grouping for filters and per-category scores."
+        },
+        "message": {
+          "type": "string",
+          "pattern": "\\S",
+          "description": "What the user says to the agent."
+        },
+        "critical": {
+          "type": "boolean",
+          "description": "A failing critical case fails the whole run."
+        },
+        "context": {
+          "type": "object",
+          "description": "Passed to the agent as-is (user id, role, a scripted history)."
+        },
+        "expect": {
+          "$ref": "#/$defs/expect"
+        },
+        "rubric": {
+          "type": "string",
+          "pattern": "\\S",
+          "description": "Plain-language criteria for the LLM judge."
+        }
+      },
+      "required": [
+        "id",
+        "category",
+        "message"
+      ],
+      "additionalProperties": false,
+      "anyOf": [
+        {
+          "required": [
+            "rubric"
+          ]
+        },
+        {
+          "required": [
+            "expect"
+          ],
+          "properties": {
+            "expect": {
+              "type": "object",
+              "minProperties": 1
+            }
+          }
+        }
+      ],
+      "if": {
+        "properties": {
+          "critical": {
+            "const": true
+          }
+        },
+        "required": [
+          "critical"
+        ]
+      },
+      "then": {
+        "required": [
+          "expect"
+        ],
+        "properties": {
+          "expect": {
+            "type": "object",
+            "minProperties": 1
+          }
+        }
+      }
+    },
+    "expect": {
+      "type": "object",
+      "description": "Rule-based expectations.",
+      "properties": {
+        "tools": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "pattern": "\\S"
+          }
+        },
+        "noTools": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "pattern": "\\S"
+          }
+        },
+        "anyTool": {
+          "type": "boolean"
+        },
+        "handoff": {
+          "type": "boolean"
+        },
+        "toolArgs": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": "object",
+            "minProperties": 1
+          }
+        },
+        "includesAny": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "pattern": "\\S"
+          }
+        },
+        "excludes": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "pattern": "\\S"
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
