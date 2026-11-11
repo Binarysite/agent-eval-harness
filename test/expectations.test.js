@@ -54,3 +54,18 @@ test('an unknown rule fails instead of passing silently', () => {
   assert.equal(c.pass, false);
   assert.match(c.detail, /unknown expectation/);
 });
+
+test('text rules see through zero-width characters, soft hyphens and fullwidth letters', () => {
+  for (const reply of [
+    'Order is in pro​duction',
+    'Order is in pro­duction',
+    'Order is in ｐｒｏｄｕｃｔｉｏｎ',
+    'Order is in PRO⁠DUCTION',
+    'Order is in pro﻿duction',
+  ]) {
+    assert.deepEqual(failing(checkExpectations({ excludes: ['in production'] }, out(reply))), ['excludes'], JSON.stringify(reply));
+    assert.deepEqual(failing(checkExpectations({ includesAny: ['in production'] }, out(reply))), [], JSON.stringify(reply));
+  }
+  // The phrase is normalized too, so a fullwidth phrase matches a plain reply.
+  assert.deepEqual(failing(checkExpectations({ excludes: ['Ｒiverton'] }, out('shipping to Riverton'))), ['excludes']);
+});

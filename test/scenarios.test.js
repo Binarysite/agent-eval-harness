@@ -48,7 +48,7 @@ test('an empty expect block without a rubric is rejected, not a free pass', () =
 });
 
 test('toolArgs must map each tool to an argument object', () => {
-  for (const toolArgs of [null, [], {}, { lookup_order: null }, { lookup_order: '10482' }]) {
+  for (const toolArgs of [null, [], {}, { lookup_order: null }, { lookup_order: '10482' }, { lookup_order: {} }]) {
     const bank = [{ id: 'a', category: 'x', message: 'hi', expect: { toolArgs } }];
     assert.throws(() => validateScenarios(bank), /"toolArgs" must map tool names/, JSON.stringify(toolArgs));
   }

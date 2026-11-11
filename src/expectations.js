@@ -17,7 +17,11 @@ import { isDeepStrictEqual } from 'node:util';
  * @property {(value: any, out: AgentOutput, called: string[], opts: CheckOptions) => Omit<CheckResult, 'rule'>} check
  */
 
-const lower = (s) => String(s).toLowerCase();
+// Zero-width characters, the word joiner, the BOM and the soft hyphen render as
+// nothing, and fullwidth letters render like ASCII; either would slip a forbidden
+// phrase past a plain substring match.
+const INVISIBLE = /[\u200B-\u200D\u2060\uFEFF\u00AD]/g;
+const normalize = (s) => String(s).normalize('NFKC').replace(INVISIBLE, '').toLowerCase();
 const quote = (list) => list.map((x) => JSON.stringify(x)).join(', ');
 /** A plain object: not null, not an array. */
 export const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -25,7 +29,9 @@ export const isObject = (v) => v !== null && typeof v === 'object' && !Array.isA
 const isStringList = (v) => Array.isArray(v) && v.length > 0
   && v.every((x) => typeof x === 'string' && x.trim() !== '');
 const isBoolean = (v) => typeof v === 'boolean';
-const isArgsMap = (v) => isObject(v) && Object.keys(v).length > 0 && Object.values(v).every(isObject);
+// `{ tool: {} }` would pass on any call to the tool, which `tools` already says.
+const isArgsMap = (v) => isObject(v) && Object.keys(v).length > 0
+  && Object.values(v).every((args) => isObject(args) && Object.keys(args).length > 0);
 
 /** True when every key in `expected` deep-equals the same key in `actual`. */
 function argsMatch(actual = {}, expected = {}) {
@@ -86,7 +92,7 @@ const RULES = {
   },
 
   toolArgs: {
-    expects: 'map tool names to argument objects',
+    expects: 'map tool names to non-empty argument objects',
     valid: isArgsMap,
     check(spec, out) {
       const bad = Object.entries(spec).filter(
@@ -105,8 +111,8 @@ const RULES = {
     expects: 'be a non-empty array of non-empty strings',
     valid: isStringList,
     check(phrases, out) {
-      const text = lower(out.reply);
-      const pass = phrases.some((p) => text.includes(lower(p)));
+      const text = normalize(out.reply);
+      const pass = phrases.some((p) => text.includes(normalize(p)));
       return {
         pass,
         detail: pass ? 'reply contains an expected phrase' : `reply contains none of: ${quote(phrases)}`,
@@ -118,8 +124,8 @@ const RULES = {
     expects: 'be a non-empty array of non-empty strings',
     valid: isStringList,
     check(phrases, out) {
-      const text = lower(out.reply);
-      const hit = phrases.filter((p) => text.includes(lower(p)));
+      const text = normalize(out.reply);
+      const hit = phrases.filter((p) => text.includes(normalize(p)));
       return {
         pass: hit.length === 0,
         detail: hit.length ? `reply contains forbidden text: ${quote(hit)}` : 'no forbidden text in reply',
