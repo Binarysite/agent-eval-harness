@@ -228,9 +228,9 @@ The other three rows describe those projects as their READMEs did on 2026-10-09.
 - **Small banks give coarse rates.** The 95% interval of 23 of 24 runs from 79.8% to
   99.3%. The summary prints it and `compare` says when a change is within it; overlapping
   intervals is a conservative test, so read which cases moved.
-- **`excludes` does not fold look-alike letters.** Invisible characters, fullwidth letters
-  and line breaks cannot hide a phrase, but `rеfund` with a Cyrillic `е` is not `refund`;
-  a critical case needs a rubric too. See [SECURITY.md](SECURITY.md#known-limits).
+- **`excludes` catches accidents, not an attacker.** Default-ignorable characters, fullwidth
+  letters and line breaks cannot hide a phrase. Control characters and look-alike letters can
+  (`rеfund` with a Cyrillic `е` is not `refund`), so a critical case needs a rubric too. See [SECURITY.md](SECURITY.md#known-limits).
 - **Reports keep every reply and tool result in full.** Treat a report from a real agent
   as sensitive.
 
