@@ -6,7 +6,11 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-11-11
+
 ### Changed
+
+Behaviour a CI job can notice when it upgrades; each is detailed under Fixed.
 
 - A call that ignores the abort keeps its concurrency slot until it stops. One still running
   two timeouts after it timed out stops the run: the cases and trials not yet started are
@@ -216,7 +220,8 @@ Behaviour a CI job can notice when it upgrades; each is detailed under Fixed.
   tool-use example agent, and CI with a dependency-free lint, `npm audit` and a regression step
   that requires exactly exit 1.
 
-[Unreleased]: https://github.com/Binarysite/agent-eval-harness/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/Binarysite/agent-eval-harness/compare/v0.4.2...HEAD
+[0.4.2]: https://github.com/Binarysite/agent-eval-harness/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/Binarysite/agent-eval-harness/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/Binarysite/agent-eval-harness/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/Binarysite/agent-eval-harness/compare/v0.3.0...v0.3.1
