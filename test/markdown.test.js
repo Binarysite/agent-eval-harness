@@ -36,7 +36,7 @@ test('the summary of the regressed run is a stable snapshot', async () => {
     '',
     '| Cases | Passed | Failed | Errors | Pass rate | Critical passed |',
     '|---|---|---|---|---|---|',
-    '| 24 | 23 | 1 | 0 | 95.8% (min 90.0%) | 7 of 8 |',
+    '| 24 | 23 | 1 | 0 | 95.8% (95% CI 79.8% to 99.3%, min 90.0%) | 7 of 8 |',
     '',
     'The gate failed:',
     '',
@@ -61,7 +61,7 @@ test('the summary of the regressed run is a stable snapshot', async () => {
 test('a green run has no failure sections and a missing commit reads as none', async () => {
   const md = formatMarkdown(await reportOf(agent, { ...META, gitSha: null }));
   assert.match(md, /^## agent-eval: PASS\n/);
-  assert.match(md, /\| 24 \| 24 \| 0 \| 0 \| 100\.0% \(min 90\.0%\) \| 8 of 8 \|/);
+  assert.match(md, /\| 24 \| 24 \| 0 \| 0 \| 100\.0% \(95% CI 86\.2% to 100\.0%, min 90\.0%\) \| 8 of 8 \|/);
   assert.doesNotMatch(md, /gate failed|did not pass/);
   assert.match(md, /- Commit: none\n/);
 });

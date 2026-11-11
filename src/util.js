@@ -16,6 +16,38 @@ export function pct(x) {
 }
 
 /**
+ * The 95% Wilson score interval for `passed` successes out of `total`. Unlike
+ * p +/- 1.96 sd, it stays inside 0..1 and is still useful at 24 of 24.
+ * @param {number} passed
+ * @param {number} total
+ * @returns {{ low: number, high: number, level: number } | null} null when there are no cases
+ */
+export function wilsonInterval(passed, total) {
+  if (!Number.isInteger(passed) || !Number.isInteger(total) || passed < 0 || passed > total) {
+    throw new RangeError(`wilsonInterval needs integers with 0 <= passed <= total, got ${passed} of ${total}`);
+  }
+  if (total === 0) return null;
+  const z = 1.96;
+  const p = passed / total;
+  const z2n = (z * z) / total;
+  const center = (p + z2n / 2) / (1 + z2n);
+  const half = (z * Math.sqrt((p * (1 - p)) / total + z2n / (4 * total))) / (1 + z2n);
+  return { low: Math.max(0, center - half), high: Math.min(1, center + half), level: 0.95 };
+}
+
+/** "95% CI 79.8% to 99.3%" */
+export const formatInterval = ({ low, high }) => `95% CI ${pct(low)} to ${pct(high)}`;
+
+/**
+ * What follows a pass rate: "95% CI 79.8% to 99.3%, min 90.0%", or only the minimum with no cases.
+ * @param {{ passRateInterval?: { low: number, high: number } | null, minPassRate: number }} summary
+ */
+export const rateNote = ({ passRateInterval, minPassRate }) => [
+  passRateInterval && formatInterval(passRateInterval),
+  `min ${pct(minPassRate)}`,
+].filter(Boolean).join(', ');
+
+/**
  * Add up token counts per role. Returns undefined when nothing reported any,
  * so a run without usage shows no token line at all.
  * @param {Array<UsageByRole | undefined>} list

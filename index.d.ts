@@ -140,12 +140,20 @@ export interface RunOptions {
 
 export type CaseOptions = Omit<RunOptions, 'concurrency' | 'trials' | 'onResult'>;
 
+export interface Interval {
+  low: number;
+  high: number;
+  level: number;
+}
+
 export interface Summary {
   total: number;
   passed: number;
   failed: number;
   errors: number;
   passRate: number;
+  /** 95% Wilson score interval of the pass rate; `null` with no cases. The gate uses `passRate`. */
+  passRateInterval: Interval | null;
   minPassRate: number;
   critical: { total: number; passed: number; failures: string[] };
   byCategory: Record<string, { total: number; passed: number }>;
@@ -180,7 +188,14 @@ export interface Comparison {
   changes: StatusChange[];
   /** Changes whose previous status was `pass`, including `pass -> missing`. */
   regressions: StatusChange[];
-  passRate: { before: number; after: number };
+  passRate: {
+    before: number;
+    after: number;
+    beforeInterval: Interval | null;
+    afterInterval: Interval | null;
+    /** `true` when the two 95% intervals overlap, `null` when a report has no counts. */
+    withinNoise: boolean | null;
+  };
   /** Facts worth seeing that do not make the runs incomparable, such as `commits: abc -> def`. */
   notes: string[];
   warnings: string[];
@@ -189,7 +204,7 @@ export interface Comparison {
 /** The fields compareReports reads from a report. */
 export interface ComparableReport {
   meta?: Record<string, unknown>;
-  summary: { passRate: number };
+  summary: { passRate: number; passed?: number; total?: number };
   results: Array<{ id: string; status: string; critical: boolean }>;
 }
 

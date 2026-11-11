@@ -132,8 +132,12 @@ check keeps the code honest to it.
 - **Single turn per scenario.** Multi-turn flows can be tested by having your
   agent function replay a scripted history (see `examples/starter`, scenario
   `history-01`), but the scenario format does not model conversations yet.
-- **Small banks give coarse rates.** With 24 cases, one case is 4.2 points.
-  Look at which cases moved, not only the percentage.
+- **Small banks give coarse rates.** With 24 cases, one case is 4.2 points,
+  and the 95% Wilson interval of 23 of 24 is 79.8% to 99.3%. The summary
+  prints the interval and `compare` labels a change "within noise" when the two
+  intervals overlap. That test is conservative: two rates can differ
+  significantly with overlapping intervals. Look at which cases moved, not
+  only the percentage.
 - **Tokens are recorded when the agent or judge reports them; no price table.**
   Each case keeps the input and output tokens its agent and judge reported,
   summed over trials, and the summary adds them up. The bundled judges and the

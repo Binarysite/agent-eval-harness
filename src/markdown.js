@@ -1,4 +1,4 @@
-import { formatUsage, pct, redactSecrets } from './util.js';
+import { formatUsage, pct, rateNote, redactSecrets } from './util.js';
 
 /**
  * A Markdown summary of one run, for a CI job page (`$GITHUB_STEP_SUMMARY`).
@@ -54,7 +54,7 @@ export function formatMarkdown({ meta = {}, summary: s, results }) {
     '',
     '| Cases | Passed | Failed | Errors | Pass rate | Critical passed |',
     '|---|---|---|---|---|---|',
-    `| ${s.total} | ${s.passed} | ${s.failed} | ${s.errors} | ${pct(s.passRate)} (min ${pct(s.minPassRate)}) `
+    `| ${s.total} | ${s.passed} | ${s.failed} | ${s.errors} | ${pct(s.passRate)} (${rateNote(s)}) `
       + `| ${s.critical.passed} of ${s.critical.total} |`,
     '',
   ];

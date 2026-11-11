@@ -109,3 +109,14 @@ test('summarize rejects a minPassRate that is not a number from 0 to 1', () => {
   assert.equal(summarize([], { minPassRate: 0 }).minPassRate, 0);
   assert.equal(summarize([], { minPassRate: 1 }).minPassRate, 1);
 });
+
+test('the summary carries a 95% Wilson interval next to the pass rate', () => {
+  const results = Array.from({ length: 24 }, (_, i) => ({
+    id: `c${i}`, category: 'x', critical: false, status: i ? 'pass' : 'fail', checks: [{ rule: 'r', pass: true, detail: '' }], verdict: null,
+  }));
+  const s = summarize(results);
+  assert.equal(s.passRateInterval.level, 0.95);
+  assert.deepEqual([s.passRateInterval.low.toFixed(3), s.passRateInterval.high.toFixed(3)], ['0.798', '0.993']);
+  assert.match(formatSummary(s), /pass rate 95\.8% \(95% CI 79\.8% to 99\.3%, min 90\.0%\)/);
+  assert.equal(summarize([]).passRateInterval, null);
+});
