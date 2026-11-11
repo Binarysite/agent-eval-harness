@@ -80,6 +80,8 @@ export interface Verdict {
   graded?: boolean;
   /** Tokens the judge call used; moved to `CaseResult.usage.judge`. */
   usage?: Usage;
+  /** The model the API says answered, when it says; an alias can map to a different model. */
+  servedModel?: string;
 }
 
 export interface JudgeInput {
@@ -247,6 +249,73 @@ export function compareReports(
   labels?: { beforeLabel?: string; afterLabel?: string },
 ): Comparison;
 export function formatComparison(comparison: Comparison): string;
+
+/** A reply whose right verdict is known, for calibrating a judge. */
+export interface LabelledCase {
+  id: string;
+  /** Id of the scenario whose message and rubric the judge sees. */
+  scenario: string;
+  label: 'pass' | 'fail';
+  output: AgentOutput;
+  kind?: string;
+  /** A second reader could reasonably flip the label. */
+  ambiguous?: boolean;
+  note?: string;
+}
+
+export interface TrialVerdict {
+  pass: boolean | null;
+  reason: string;
+  servedModel?: string;
+  usage?: Usage;
+}
+
+export interface CalibratedCase extends LabelledCase {
+  /** Whether the scenario's rules alone would have let this reply through. */
+  rulesPass: boolean;
+  verdicts: TrialVerdict[];
+}
+
+export interface ConfusionRates {
+  /** Bad reply (label `fail`) is the positive class. */
+  confusion: { tp: number; fn: number; fp: number; tn: number };
+  /** Share of bad replies the judge failed. */
+  tpr: number | null;
+  /** Share of good replies the judge failed. */
+  fpr: number | null;
+  accuracy: number | null;
+  kappa: number | null;
+}
+
+export interface CalibrationMetrics {
+  cases: number;
+  labels: { pass: number; fail: number };
+  verdicts: { total: number; undecided: number };
+  perTrial: ConfusionRates;
+  majority: ConfusionRates & { undecided: number };
+  selfConsistency: { unanimous: number; meanPairwiseAgreement: number } | null;
+  rulesAlone: { badCaught: number | null; goodBlocked: number | null };
+  pipeline: { badCaught: number | null; goodPassed: number | null };
+}
+
+/** Grade every labelled reply `trials` times (default 5) and record the verdicts. */
+export function runCalibration(
+  labelled: LabelledCase[],
+  scenarios: Scenario[],
+  opts: {
+    judge: Judge;
+    trials?: number;
+    concurrency?: number;
+    timeoutMs?: number;
+    retries?: number;
+    retryDelayMs?: number;
+    /** Stop starting verdicts once `costOf(usage)` reaches this. */
+    maxCostUsd?: number;
+    costOf?: (usage: Usage) => number;
+    onVerdict?: (labelled: LabelledCase, verdict: TrialVerdict) => void;
+  },
+): Promise<{ cases: CalibratedCase[]; usage: Usage; costUsd: number; skipped: number }>;
+export function calibrationMetrics(cases: CalibratedCase[]): CalibrationMetrics;
 
 export function createMockJudge(opts?: { maxChars?: number; banned?: string[] }): Judge;
 /**
