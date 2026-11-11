@@ -44,3 +44,15 @@ your machine depends on the agent and the judge you choose:
 
 Scenario banks, agent modules and `args` are code and input you provide: the harness
 imports your agent module and runs it with your privileges, so run only agents you trust.
+
+## Known limits
+
+- **`excludes` does not fold look-alike letters.** It drops invisible characters, applies
+  NFKC and folds whitespace, so zero-width characters, bidi overrides, fullwidth letters or
+  a joiner between a letter and its accent do not hide a forbidden phrase. Letters from
+  another script that look the same are a different text: `rеfund` with a Cyrillic `е`
+  (U+0435) does not match `refund`. Folding confusables (Unicode TR39) needs a data table
+  this dependency-free harness does not ship. Pair each critical `excludes` with a rubric
+  for an LLM judge, and treat `excludes` as a guard against accidents, not against an
+  agent or a prompt injection trying to slip a phrase past it.
+

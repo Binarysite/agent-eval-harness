@@ -70,6 +70,48 @@ test('text rules see through zero-width characters, soft hyphens and fullwidth l
   assert.deepEqual(failing(checkExpectations({ excludes: ['Ｒiverton'] }, out('shipping to Riverton'))), ['excludes']);
 });
 
+test('an invisible character between a letter and its accent cannot split the phrase', () => {
+  // Dropping invisibles only after NFKC left "e" + U+0301 uncomposed, so "café" missed.
+  for (const [name, mark] of Object.entries({
+    'combining grapheme joiner U+034F': '\u034F',
+    'zero width joiner U+200D': '\u200D',
+    'tag characters U+E0001 U+E0041': '\u{E0001}\u{E0041}',
+    'zero width space U+200B': '\u200B',
+  })) {
+    for (const [phrase, reply] of [
+      ['café', `Meet me at the cafe${mark}\u0301`],
+      ['devolución', `Su devolucio${mark}\u0301n está lista`],
+      ['DEVOLUCIÓN', `su devolucio${mark}${mark}\u0301n`],
+    ]) {
+      assert.deepEqual(failing(checkExpectations({ excludes: [phrase] }, out(reply))), ['excludes'], `${name}: ${phrase}`);
+      assert.deepEqual(failing(checkExpectations({ includesAny: [phrase] }, out(reply))), [], `${name}: ${phrase}`);
+    }
+  }
+  // The decomposed phrase matches a precomposed reply too.
+  assert.deepEqual(failing(checkExpectations({ excludes: ['cafe\u0301'] }, out('a café'))), ['excludes']);
+});
+
+test('blank characters that are not whitespace or are wide fillers read as a space', () => {
+  for (const [name, reply] of Object.entries({
+    'next line U+0085': 'full\u0085refund',
+    'braille blank U+2800': 'full\u2800refund',
+    'Hangul filler U+3164 as a space': 'full\u3164refund',
+    'halfwidth Hangul filler U+FFA0': 'full\uFFA0refund',
+    'Hangul choseong filler U+115F': 'full\u115Frefund',
+    'Hangul jungseong filler U+1160': 'full\u1160refund',
+  })) {
+    assert.deepEqual(failing(checkExpectations({ excludes: ['full refund'] }, out(`a ${reply}`))), ['excludes'], name);
+    assert.deepEqual(failing(checkExpectations({ includesAny: ['full refund'] }, out(`a ${reply}`))), [], name);
+  }
+  // Inside a word a filler still reads as nothing, as before.
+  assert.deepEqual(failing(checkExpectations({ excludes: ['full refund'] }, out('a fu\u3164ll refund'))), ['excludes']);
+});
+
+test('look-alike letters from another script are a known limit, not folded', () => {
+  // Cyrillic U+0435 for a Latin "e": documented in SECURITY.md and the README Limits.
+  assert.deepEqual(failing(checkExpectations({ excludes: ['full refund'] }, out('full r\u0435fund'))), []);
+});
+
 test('text rules ignore every default-ignorable character and fold whitespace', () => {
   const cases = {
     'left-to-right mark U+200E': 'in pro‎duction',

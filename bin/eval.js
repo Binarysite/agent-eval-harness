@@ -74,12 +74,16 @@ const JUDGES = {
   none: () => undefined,
 };
 
+// Plain decimal only: Number() also reads "0x1", "0b1" and "0o1".
+const DECIMAL = /^[+-]?(\d+\.?\d*|\.\d+)(e[+-]?\d+)?$/i;
+
 /**
  * Number('') and Number(' ') are 0, so a blank value (an unset shell variable)
- * is rejected instead of read as 0.
+ * is rejected instead of read as 0. So is anything but a decimal number:
+ * Number('0x1') is 1, which no one meant as a pass rate.
  */
 function toNumber(name, value, { min = 0, max = Infinity, integer = false } = {}) {
-  const n = String(value).trim() === '' ? NaN : Number(value);
+  const n = DECIMAL.test(String(value).trim()) ? Number(value) : NaN;
   const kind = integer ? 'an integer' : 'a number';
   if (!Number.isFinite(n) || n < min || n > max || (integer && !Number.isInteger(n))) {
     throw new Error(`--${name} must be ${kind} between ${min} and ${max}, got ${JSON.stringify(value)}`);
