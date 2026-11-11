@@ -14,6 +14,13 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `--concurrency 1` with 4 cases had 4. A timed-out call is now always waited for, up to one
   more timeout; one still running after that is reported as stuck. A hung case can now take
   up to twice `--timeout`.
+- A blank numeric flag read as 0: `Number('')` and `Number(' ')` are 0, so
+  `--min-pass-rate "$UNSET"` silently gated at 0. Numeric flags now reject a blank value,
+  and the action treats a whitespace-only `min-pass-rate` as unset.
+- `-o ""` or an unwritable `--out` file ran the whole, possibly billed, suite and then
+  exited 0 without a report. A blank path, or a file that cannot be opened for writing, now
+  fails before the run for both `--out` and `--md` (exit 2); the check leaves no empty file
+  behind. A report that cannot be written after the run now exits 2 instead of 0 or 1.
 
 ## [0.4.0] - 2026-11-11
 

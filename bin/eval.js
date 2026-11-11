@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { appendFile, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, open, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
@@ -53,7 +53,8 @@ const HELP = `Usage: agent-eval -s <scenarios.json> -a <agent.js> [options]
       --trials <k>          run each case k times; mixed results mark it flaky and a
                             critical case must pass k/k (default ${DEFAULTS.trials})
       --timeout <ms>        per call timeout for agent and judge (default ${DEFAULTS.timeout})
-      --min-pass-rate <x>   overall pass rate required, 0..1 (default ${DEFAULTS.minPassRate})
+      --min-pass-rate <x>   overall pass rate required, 0..1 (default ${DEFAULTS.minPassRate});
+                            a blank value is an error, not 0
       --handoff-tool <name> tool the "handoff" rule looks for (default ${DEFAULTS.handoffTool})
   -o, --out <file>          JSON report path (default ${DEFAULTS.out})
       --md <file>           append a Markdown summary to this file, for example
@@ -61,7 +62,8 @@ const HELP = `Usage: agent-eval -s <scenarios.json> -a <agent.js> [options]
   -v, --verbose             print every reply and tool call
   -h, --help
 
-Exit codes: 0 gate passed, 1 gate failed, 2 usage or setup error.
+Exit codes: 0 gate passed, 1 gate failed, 2 usage or setup error (including a
+report that could not be written after the run).
 compare exits 1 when a case that passed before no longer passes.`;
 
 const JUDGES = {
@@ -71,20 +73,37 @@ const JUDGES = {
   none: () => undefined,
 };
 
+/**
+ * Number('') and Number(' ') are 0, so a blank value (an unset shell variable)
+ * is rejected instead of read as 0.
+ */
 function toNumber(name, value, { min = 0, max = Infinity, integer = false } = {}) {
-  const n = Number(value);
+  const n = String(value).trim() === '' ? NaN : Number(value);
   const kind = integer ? 'an integer' : 'a number';
   if (!Number.isFinite(n) || n < min || n > max || (integer && !Number.isInteger(n))) {
-    throw new Error(`--${name} must be ${kind} between ${min} and ${max}`);
+    throw new Error(`--${name} must be ${kind} between ${min} and ${max}, got ${JSON.stringify(value)}`);
   }
   return n;
 }
 
-/** Create the folder of `file` and refuse a path that is a folder itself. */
+/**
+ * Fail before the run, when it costs no billed calls, if `file` cannot be written:
+ * a blank path, a folder that cannot be created, a path that is a folder, or a
+ * file that cannot be opened for writing. The probe opens the file for appending,
+ * which never truncates it, and removes it again when it did not exist before,
+ * so a run that stops before writing leaves nothing behind.
+ */
 async function assertWritablePath(file, flag) {
+  if (file.trim() === '') throw new Error(`${flag} needs a file path, got ${JSON.stringify(file)}`);
   await mkdir(dirname(resolve(file)), { recursive: true });
   const existing = await stat(file).catch(() => null);
   if (existing?.isDirectory()) throw new Error(`${flag} ${file} is a folder, not a file`);
+  try {
+    await (await open(file, 'a')).close();
+  } catch (err) {
+    throw new Error(`${flag} ${file} cannot be written: ${err.message}`);
+  }
+  if (!existing) await rm(file, { force: true });
 }
 
 async function readReport(file) {
@@ -192,7 +211,7 @@ async function main() {
   );
   // Check both output paths before the run: a bad path then costs no billed calls.
   await assertWritablePath(args.out, '--out');
-  if (args.md) await mkdir(dirname(resolve(args.md)), { recursive: true });
+  if (args.md !== undefined) await assertWritablePath(args.md, '--md');
   const started = Date.now();
   // A real agent can take minutes; show a counter, but only to a person at a terminal.
   let finished = 0;
@@ -217,12 +236,14 @@ async function main() {
     options: opts,
     durationMs: Date.now() - started,
   });
-  // The run is over and the gate decided: a report that cannot be written now is an
-  // error message, not a different exit code.
+  // The path was checked before the run, so a report that still cannot be written is a
+  // setup error (exit 2) whatever the gate said: a CI step must not pass without its report.
+  let reportWritten = true;
   try {
     await writeFile(args.out, `${JSON.stringify(report, null, 2)}\n`);
     console.log(`Report: ${args.out}`);
   } catch (err) {
+    reportWritten = false;
     console.error(`agent-eval: could not write the report to ${args.out}: ${err.message}`);
   }
   // Appended, never overwritten: a CI job summary collects the output of several steps.
@@ -234,7 +255,8 @@ async function main() {
       console.error(`agent-eval: could not write the summary to ${args.md}: ${err.message}`);
     }
   }
-  process.exitCode = summary.gate.pass ? 0 : 1;
+  if (!reportWritten) process.exitCode = 2;
+  else process.exitCode = summary.gate.pass ? 0 : 1;
 }
 
 main().catch((err) => {

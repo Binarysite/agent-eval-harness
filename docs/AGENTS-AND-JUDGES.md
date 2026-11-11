@@ -32,7 +32,8 @@ ANTHROPIC_API_KEY=... node bin/eval.js -s ./my-scenarios.json -a ./my-agent.js -
 | `openai` | `OPENAI_API_KEY`, `JUDGE_MODEL`, optional `OPENAI_BASE_URL` for any OpenAI-compatible endpoint |
 | `none` | rules only |
 
-Exit codes: 0 gate passed, 1 gate failed, 2 usage or setup error. Other flags
+Exit codes: 0 gate passed, 1 gate failed, 2 usage or setup error (a report that could not
+be written after the run included). Other flags
 (`--retries`, `--trials`, `--timeout`, `--min-pass-rate`, `--out`, `--md`) are in
 `node bin/eval.js --help`.
 

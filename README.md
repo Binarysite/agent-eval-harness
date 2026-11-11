@@ -185,8 +185,8 @@ jobs:
 ```
 
 `judge` defaults to `mock`. Pull requests from forks get no secrets, so use `judge: mock`
-or `none` there. `min-pass-rate`, `args` (such as `--trials 3`) and `node-version` are
-optional. The JSON report stays in the workspace and is not uploaded, since it holds every
+or `none` there. `min-pass-rate` (empty or blank keeps the default), `args` (such as
+`--trials 3`) and `node-version` are optional. The JSON report stays in the workspace and is not uploaded, since it holds every
 reply in full.
 
 ## When to use this, and when not
