@@ -258,3 +258,16 @@ test('judges record the model the API says answered, which an alias can hide', a
   assert.equal((await judge({ scenario, output: output('x') })).servedModel, 'deepseek-flash');
   assert.equal('servedModel' in (await judge({ scenario, output: output('x') })), false);
 });
+
+test('the judge prompt shows what each tool returned, cut to a bounded length', () => {
+  const p = buildJudgePrompt(scenario, output('Arrives Monday.', [
+    { name: 'lookup_order', args: { orderId: '1' }, result: { status: 'shipped', detail: 'arriving Thursday' } },
+    { name: 'handoff_to_human', args: {} },
+    { name: 'dump', args: {}, result: 'x'.repeat(5000) },
+  ]));
+  assert.match(p, /lookup_order\({"orderId":"1"}\) returned {"status":"shipped","detail":"arriving Thursday"}/);
+  assert.match(p, /handoff_to_human\({}\)(?! returned)/);
+  const dump = p.split('\n').find((l) => l.startsWith('Tools called:')).split('dump({}) returned ')[1];
+  assert.ok(dump.length <= 1003 && dump.endsWith('...'), `result cut: ${dump.length}`);
+  assert.match(JUDGE_SYSTEM, /what each tool returned/);
+});

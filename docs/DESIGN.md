@@ -120,9 +120,12 @@ check keeps the code honest to it.
   and `reports/calibration/` measure two DeepSeek judges against 48 labelled
   replies (one labeller). With 25 bad and 23 good replies, every rate has a wide
   interval, and a different bank or model needs its own calibration.
-- **The judge sees tool calls, not their results.** A reply that misquotes a
-  lookup ("arrives Monday" when the lookup said Thursday) passed both calibrated
-  judges 5 of 5 times. Only a rule that knows the right value catches that today.
+- **The judge checks facts only against tool results the agent reports.** A
+  reply that misquoted a lookup ("arrives Monday" when the lookup said Thursday)
+  passed both calibrated judges 5 of 5 times while the judge saw only tool
+  calls. A tool call may now carry its `result`, which the judge sees (cut to
+  1000 characters) and the rules ignore; an agent that does not report results
+  keeps the blind spot.
 - **Real runs are few.** CI and every output in the README use the mock judge.
   Published real runs: the 2026-10-10 judge run, the 2026-11-11 calibration and
   the 2026-11-11 LLM-agent run, all on DeepSeek. No Anthropic run is published.
@@ -160,8 +163,6 @@ check keeps the code honest to it.
 
 ## Roadmap
 
-- Pass tool results to the judge, so it can check a reply against what a tool
-  returned (the blind spot the calibration found).
 - A first-class conversation history in the scenario format (today it goes in
   `context`, see `examples/starter`).
 

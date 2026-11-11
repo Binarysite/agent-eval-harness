@@ -7,7 +7,7 @@ import { isDeepStrictEqual } from 'node:util';
  * tools ran, what text must never appear). Anything that needs judgment goes in
  * the scenario's `rubric` for the LLM judge.
  *
- * @typedef {{ name: string, args?: Record<string, unknown> }} ToolCall
+ * @typedef {{ name: string, args?: Record<string, unknown>, result?: unknown }} ToolCall
  * @typedef {{ reply: string, toolCalls: ToolCall[] }} AgentOutput
  * @typedef {{ rule: string, pass: boolean, detail: string }} CheckResult
  * @typedef {{ handoffTool: string }} CheckOptions

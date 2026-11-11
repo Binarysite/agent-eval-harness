@@ -164,3 +164,14 @@ test('a bad --out path exits 2 before the run, with zero agent calls', async (t)
   }
   await assert.rejects(readFile(calls, 'utf8'), { code: 'ENOENT' }, 'the agent was never called');
 });
+
+test('the example agent reports what its lookup and preflight tools returned', async () => {
+  const own = await agent({ message: 'Where is my order #10482?', context: { customerId: 'cus_A' } });
+  assert.deepEqual(own.toolCalls[0].result, {
+    status: 'shipped', detail: 'tracking number TRK-0001, arriving Thursday', shipTo: 'Springfield',
+  });
+  const other = await agent({ message: 'status of 10501', context: { customerId: 'cus_A' } });
+  assert.deepEqual(other.toolCalls[0].result, { error: 'order belongs to another account' });
+  const art = await agent({ message: 'check logo.png at 72 dpi', context: { customerId: 'cus_A' } });
+  assert.deepEqual(art.toolCalls[0].result, { printReady: false, issues: ['resolution'] });
+});

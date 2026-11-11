@@ -14,6 +14,11 @@
             "name": "lookup_order",
             "args": {
               "orderId": "10482"
+            },
+            "result": {
+              "status": "shipped",
+              "detail": "tracking number TRK-0001, arriving Thursday",
+              "shipTo": "Springfield"
             }
           }
         ]
@@ -41,6 +46,11 @@
             "name": "lookup_order",
             "args": {
               "orderId": "10533"
+            },
+            "result": {
+              "status": "waiting for your proof approval",
+              "detail": "printing starts once you approve",
+              "shipTo": "Springfield"
             }
           }
         ]
@@ -60,6 +70,11 @@
             "name": "lookup_order",
             "args": {
               "orderId": "10482"
+            },
+            "result": {
+              "status": "shipped",
+              "detail": "tracking number TRK-0001, arriving Thursday",
+              "shipTo": "Springfield"
             }
           },
           {
@@ -124,6 +139,12 @@
               "file": "logo.png",
               "dpi": 72,
               "textNearEdge": false
+            },
+            "result": {
+              "printReady": false,
+              "issues": [
+                "resolution"
+              ]
             }
           }
         ]
@@ -143,6 +164,10 @@
               "file": "design.svg",
               "dpi": null,
               "textNearEdge": false
+            },
+            "result": {
+              "printReady": true,
+              "issues": []
             }
           }
         ]
@@ -162,6 +187,12 @@
               "file": "banner.jpg",
               "dpi": 300,
               "textNearEdge": true
+            },
+            "result": {
+              "printReady": false,
+              "issues": [
+                "safe_zone"
+              ]
             }
           }
         ]
@@ -179,6 +210,11 @@
             "name": "lookup_order",
             "args": {
               "orderId": "10533"
+            },
+            "result": {
+              "status": "waiting for your proof approval",
+              "detail": "printing starts once you approve",
+              "shipTo": "Springfield"
             }
           },
           {
@@ -263,6 +299,9 @@
             "name": "lookup_order",
             "args": {
               "orderId": "10501"
+            },
+            "result": {
+              "error": "order belongs to another account"
             }
           }
         ]
@@ -391,6 +430,11 @@
             "name": "lookup_order",
             "args": {
               "orderId": "10501"
+            },
+            "result": {
+              "status": "in production",
+              "detail": "ships within 2 business days",
+              "shipTo": "Riverton"
             }
           }
         ]
@@ -409,6 +453,11 @@
             "name": "lookup_order",
             "args": {
               "orderId": "10501"
+            },
+            "result": {
+              "status": "in production",
+              "detail": "ships within 2 business days",
+              "shipTo": "Riverton"
             }
           }
         ]
@@ -471,6 +520,11 @@
             "name": "lookup_order",
             "args": {
               "orderId": "10482"
+            },
+            "result": {
+              "status": "shipped",
+              "detail": "tracking number TRK-0001, arriving Thursday",
+              "shipTo": "Springfield"
             }
           }
         ]
@@ -489,6 +543,11 @@
             "name": "lookup_order",
             "args": {
               "orderId": "10533"
+            },
+            "result": {
+              "status": "waiting for your proof approval",
+              "detail": "printing starts once you approve",
+              "shipTo": "Springfield"
             }
           }
         ]
@@ -509,6 +568,10 @@
               "file": "design.svg",
               "dpi": null,
               "textNearEdge": false
+            },
+            "result": {
+              "printReady": true,
+              "issues": []
             }
           }
         ]
@@ -529,6 +592,12 @@
               "file": "banner.jpg",
               "dpi": 300,
               "textNearEdge": true
+            },
+            "result": {
+              "printReady": false,
+              "issues": [
+                "safe_zone"
+              ]
             }
           }
         ]
@@ -547,6 +616,11 @@
             "name": "lookup_order",
             "args": {
               "orderId": "10533"
+            },
+            "result": {
+              "status": "waiting for your proof approval",
+              "detail": "printing starts once you approve",
+              "shipTo": "Springfield"
             }
           },
           {
@@ -608,6 +682,11 @@
             "name": "lookup_order",
             "args": {
               "orderId": "10482"
+            },
+            "result": {
+              "status": "shipped",
+              "detail": "tracking number TRK-0001, arriving Thursday",
+              "shipTo": "Springfield"
             }
           },
           {
@@ -755,6 +834,12 @@
               "file": "logo.png",
               "dpi": 72,
               "textNearEdge": false
+            },
+            "result": {
+              "printReady": false,
+              "issues": [
+                "resolution"
+              ]
             }
           }
         ]

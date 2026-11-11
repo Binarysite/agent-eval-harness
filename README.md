@@ -203,8 +203,8 @@ The other three rows describe those projects as their READMEs did on 2026-10-09.
   graded 5 times each, `deepseek-chat` caught 24 of 25 bad replies and failed 2 of 23 good
   ones (kappa 0.875); `deepseek-reasoner` caught 24 of 25 and failed 1 of 23 (kappa 0.917),
   at USD 0.0099 and 0.0240 per 100 verdicts. The rules alone caught 1 of the 25. The miss
-  both share is structural: the judge sees tool calls, not their results, so it passed a
-  wrong arrival day taken from a lookup. One labeller, and both names answered as the same
+  both shared was structural: the judge saw tool calls, not their results, so it passed a
+  wrong arrival day taken from a lookup. A tool call can now carry its `result` for the judge. One labeller, and both names answered as the same
   DeepSeek model. See the [calibration report](reports/calibration/2026-11-11-deepseek.md).
   No Anthropic judge run is published; CI and the outputs above use the mock judge, which
   does not read rubrics.

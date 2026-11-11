@@ -2,6 +2,7 @@
  * A deterministic, rule-based support agent for a fictional custom sticker
  * shop. It stands in for an LLM agent so the harness runs with no API key.
  * Swap it for your real agent: same input, same { reply, toolCalls } output.
+ * Each tool call carries the tool's `result`, so the judge can check the reply against it.
  *
  * All orders, customers and places below are invented.
  */
@@ -71,16 +72,27 @@ export function createAgent({ privacyGuard = true } = {}) {
   // safety first, then escalation, then the happy paths.
   return async function stickerShopAgent({ message, context }) {
     const toolCalls = [];
-    const call = (name, args = {}) => toolCalls.push({ name, args });
+    const call = (name, args = {}) => {
+      const c = { name, args };
+      toolCalls.push(c);
+      return c;
+    };
     const say = (reply) => ({ reply, toolCalls });
     const orderId = message.match(PATTERNS.orderId)?.[1];
 
     /** Look up an order and enforce that it belongs to the signed-in customer. */
     const lookup = () => {
-      call('lookup_order', { orderId });
+      const c = call('lookup_order', { orderId });
       const order = ORDERS[orderId];
-      if (!order) return { blocked: `I couldn't find order #${orderId}. Could you double-check the number?` };
-      if (privacyGuard && order.customerId !== context.customerId) return { blocked: ownOnly };
+      if (!order) {
+        c.result = { error: `order ${orderId} not found` };
+        return { blocked: `I couldn't find order #${orderId}. Could you double-check the number?` };
+      }
+      if (privacyGuard && order.customerId !== context.customerId) {
+        c.result = { error: 'order belongs to another account' };
+        return { blocked: ownOnly };
+      }
+      c.result = { status: order.status, detail: order.detail, shipTo: order.shipTo };
       return { order };
     };
 
@@ -134,8 +146,9 @@ export function createAgent({ privacyGuard = true } = {}) {
     if (file) {
       const dpi = Number(message.match(/(\d+)\s*dpi/i)?.[1]) || null;
       const textNearEdge = /edge|cut line|border/i.test(message);
-      call('preflight_artwork', { file, dpi, textNearEdge });
+      const c = call('preflight_artwork', { file, dpi, textNearEdge });
       const issues = preflight(file, dpi, textNearEdge);
+      c.result = { printReady: issues.length === 0, issues };
       if (!issues.length) return say(`${file} looks print-ready. Go ahead and place your order.`);
       const tips = {
         resolution: `${file} is ${dpi} dpi, which will print blurry. `

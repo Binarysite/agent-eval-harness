@@ -364,3 +364,8 @@ test('with retryOnTimeout, a call that ignores the abort past the grace period i
   assert.equal(calls, 1);
   assert.match(r.error, /did not stop/);
 });
+
+test('normalizeOutput keeps a tool result when the agent reports one', () => {
+  const out = normalizeOutput({ reply: 'x', toolCalls: [{ name: 'lookup', args: { id: 1 }, result: { status: 'shipped' } }, 'b'] });
+  assert.deepEqual(out.toolCalls, [{ name: 'lookup', args: { id: 1 }, result: { status: 'shipped' } }, { name: 'b', args: {} }]);
+});

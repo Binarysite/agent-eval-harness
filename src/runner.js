@@ -21,7 +21,8 @@ import { MAX_TIMEOUT_MS, sumUsage } from './util.js';
  * Return `usage` when the model reports token counts; the report records them.
  * @callback Agent
  * @param {{ message: string, context: Record<string, unknown>, signal: AbortSignal }} input
- * @returns {Promise<{ reply: string, toolCalls?: Array<{ name: string, args?: object } | string>, usage?: Usage }>}
+ * @returns {Promise<{ reply: string, toolCalls?: Array<{ name: string, args?: object, result?: unknown } | string>,
+ *   usage?: Usage }>}
  */
 
 /**
@@ -140,7 +141,10 @@ export async function mapLimit(items, limit, fn) {
   return results;
 }
 
-/** Accept `toolCalls` as objects or bare names; reject anything else loudly. */
+/**
+ * Accept `toolCalls` as objects or bare names; reject anything else loudly. A
+ * call's `result`, when the agent reports it, is kept for the judge.
+ */
 export function normalizeOutput(raw) {
   if (!raw || typeof raw.reply !== 'string') throw new Error('agent must return { reply: string, toolCalls?: [] }');
   const calls = raw.toolCalls ?? [];
@@ -150,7 +154,7 @@ export function normalizeOutput(raw) {
     if (!c || typeof c.name !== 'string') {
       throw new Error(`agent toolCalls[${i}] must be a tool name or { name, args }`);
     }
-    return { name: c.name, args: c.args ?? {} };
+    return { name: c.name, args: c.args ?? {}, ...(c.result !== undefined && { result: c.result }) };
   });
   return { reply: raw.reply, toolCalls };
 }

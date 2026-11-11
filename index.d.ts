@@ -6,6 +6,8 @@
 export interface ToolCall {
   name: string;
   args?: Record<string, unknown>;
+  /** What the tool returned, when the agent reports it; the judge sees it, the rules do not. */
+  result?: unknown;
 }
 
 /** What the agent said and the tools it called, after normalization. */
@@ -68,7 +70,7 @@ export interface AgentInput {
  */
 export type Agent = ((input: AgentInput) => Promise<{
   reply: string;
-  toolCalls?: Array<{ name: string; args?: object } | string>;
+  toolCalls?: Array<{ name: string; args?: object; result?: unknown } | string>;
   usage?: Usage;
 }>) & { model?: string };
 
