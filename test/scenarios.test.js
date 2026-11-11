@@ -120,7 +120,7 @@ test('a file that is not a JSON array is named in the error', async () => {
   const file = join(dir, 'object.json');
   try {
     await writeFile(file, '{ "id": "a" }');
-    await assert.rejects(loadScenarios(file), (err) => err.message === `${file}: must contain a JSON array of scenarios`);
+    await assert.rejects(loadScenarios(file), (err) => err.message === `${file}: must contain a JSON array of scenarios, or an object with a "scenarios" array`);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

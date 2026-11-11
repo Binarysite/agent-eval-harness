@@ -2,6 +2,21 @@
 
 Back to the [README](../README.md).
 
+A bank is a JSON array of scenarios, or an object with a `scenarios` array and a
+`$schema` that points at [schema/scenarios.schema.json](../schema/scenarios.schema.json),
+so an editor can complete field and rule names and flag mistakes as you type:
+
+```json
+{
+  "$schema": "https://raw.githubusercontent.com/Binarysite/agent-eval-harness/main/schema/scenarios.schema.json",
+  "scenarios": [ ... ]
+}
+```
+
+The schema is generated from the validator's own tables (`npm run schema`), and a test
+fails when it is stale. The harness still validates every bank on load, including the
+one check JSON Schema cannot express: unique ids.
+
 ```json
 {
   "id": "prv-01",

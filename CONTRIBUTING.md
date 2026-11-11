@@ -12,7 +12,8 @@ issue first so we agree on the shape before you write code.
 
 ## Checks
 
-Node 22 or newer. `npm ci` installs only TypeScript, for the type checks. CI runs these on
+Node 22 or newer. `npm ci` installs only dev tools: TypeScript for the type checks and Ajv
+for the schema test. CI runs these on
 Node 22 and 24, so run them before you open a pull request:
 
 ```bash
@@ -30,8 +31,8 @@ npm run eval:regression   # exits 1, on purpose
 
 - One test per change, in `test/`, with `node:test`. A bug fix starts with a test that fails.
 - Update `index.d.ts` for public API changes, and the README if a command or its output
-  changes.
+  changes. After a change to a rule or a scenario field, run `npm run schema`.
 - Commits follow [Conventional Commits](https://www.conventionalcommits.org/), one change
   per commit.
 - Add a line under Unreleased in `CHANGELOG.md` for anything a user would notice.
-- Keep it simple: no new dependency, and no abstraction before its second use.
+- Keep it simple: no runtime dependency, and no abstraction before its second use.
