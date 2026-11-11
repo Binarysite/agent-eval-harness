@@ -32,7 +32,8 @@ Exit codes: 0 gate passed, 1 gate failed, 2 usage or setup error. Other flags
 
 `examples/llm-agent/agent.js` is a Claude tool-use agent for the same shop and
 scenarios. It calls the API, so it needs a key and is billed. It uses the
-judge's default model, `claude-sonnet-5-5`; set `AGENT_MODEL` to change it:
+judge's default model, `claude-sonnet-5-5`; set `AGENT_MODEL` to change it, and
+`ANTHROPIC_BASE_URL` to run it against another endpoint that speaks the Messages API:
 
 ```bash
 ANTHROPIC_API_KEY=... npm run eval -- -a examples/llm-agent/agent.js --judge anthropic --timeout 60000

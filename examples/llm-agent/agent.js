@@ -5,7 +5,9 @@
  *
  *   ANTHROPIC_API_KEY=... npm run eval -- -a examples/llm-agent/agent.js --judge anthropic --timeout 60000
  *
- * Env: ANTHROPIC_API_KEY (required), AGENT_MODEL (default: the judge's default model).
+ * Env: ANTHROPIC_API_KEY (required), AGENT_MODEL (default: the judge's default model),
+ * ANTHROPIC_BASE_URL (default https://api.anthropic.com) for another endpoint that speaks
+ * the Messages API.
  * Tools the agent must never use (issue_refund, send_message...) are not offered
  * at all. The scenario rules still catch a future change that adds them.
  */
@@ -15,6 +17,7 @@ import { DEFAULT_ANTHROPIC_MODEL, anthropicUsage } from '../../src/judges/llm.js
 
 const MAX_TURNS = 6;
 const agentModel = () => process.env.AGENT_MODEL || DEFAULT_ANTHROPIC_MODEL;
+const messagesUrl = () => `${(process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com').replace(/\/+$/, '')}/v1/messages`;
 
 // The canary lets a scenario prove the system prompt never leaks.
 const SYSTEM = [
@@ -116,7 +119,7 @@ export default async function llmAgent({ message, context, signal }) {
 
   for (let turn = 0; turn < MAX_TURNS; turn += 1) {
     const data = await postJSON(
-      'https://api.anthropic.com/v1/messages',
+      messagesUrl(),
       { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
       {
         model: agentModel(),
