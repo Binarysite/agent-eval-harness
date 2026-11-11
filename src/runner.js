@@ -53,6 +53,8 @@ import { MAX_TIMEOUT_MS, sumUsage } from './util.js';
  *   absent when neither reported any
  * @property {{ run: number, passed: number }} [trials]  set by runSuite
  * @property {boolean} [flaky]  set by runSuite: the trials did not all end the same way
+ * @property {boolean} [stopped]  set by runSuite when the run stopped, on a stuck call, before every
+ *   trial of this case ran; such a case is an `error` and fails the gate
  */
 
 /**
@@ -225,10 +227,10 @@ async function settlesWithin(promise, ms) {
 /**
  * Call `fn` with a timeout, retrying transient failures up to `retries` times.
  * A call that timed out is waited for, up to another `timeoutMs`, before this
- * returns or retries, so neither a retry nor the next trial or case starts
- * next to it and the concurrency limit holds. Calls overlap only when one
- * ignores the abort for longer than that; it is then reported as stuck and not
- * retried. A timed-out call is retried only with `retryOnTimeout`.
+ * returns or retries, so a retry never starts next to it. One still running
+ * after that is reported as stuck and not retried; the error carries `settled`,
+ * so runSuite can keep the call's slot busy until it stops.
+ * A timed-out call is retried only with `retryOnTimeout`.
  */
 async function withRetries(fn, { retries, timeoutMs, retryDelayMs, retryOnTimeout, label }) {
   let attempts = 0;
@@ -239,7 +241,10 @@ async function withRetries(fn, { retries, timeoutMs, retryDelayMs, retryOnTimeou
     } catch (error) {
       if (error.settled) {
         if (!(await settlesWithin(error.settled, timeoutMs))) {
-          const stuck = new Error(`${error.message} and did not stop within ${timeoutMs} ms of the abort; not retried`);
+          const stuck = Object.assign(
+            new Error(`${error.message} and did not stop within ${timeoutMs} ms of the abort; not retried`),
+            { name: 'StuckError', settled: error.settled },
+          );
           return { error: stuck, attempts };
         }
         if (!retryOnTimeout) return { error, attempts };
@@ -272,6 +277,9 @@ function normalizeVerdict(raw) {
 /** Recorded when a case has a rubric but the run has no judge. It never decides the status. */
 const NOT_GRADED = Object.freeze({ pass: null, reason: 'rubric not graded: no judge', graded: false, attempts: 0 });
 
+/** The `settled` promise of a call that was reported as stuck, if this error is one. */
+const stuckCall = (error) => (error?.name === 'StuckError' ? error.settled : undefined);
+
 /** Ask the judge for a verdict; a judge that keeps failing becomes undecided. */
 async function judgeCase(judge, scenario, output, opts) {
   const { value, error, attempts } = await withRetries(
@@ -281,7 +289,7 @@ async function judgeCase(judge, scenario, output, opts) {
   const { verdict, usage } = error
     ? { verdict: { pass: null, reason: `error: ${error.message}`, graded: false }, usage: undefined }
     : normalizeVerdict(value);
-  return { verdict: { ...verdict, attempts }, usage };
+  return { verdict: { ...verdict, attempts }, usage, stuck: stuckCall(error) };
 }
 
 /** The `usage` field of a case result, or nothing when no one reported tokens. */
@@ -302,11 +310,24 @@ function caseStatus(rulesPass, verdict) {
  * or a "no" from the judge is never retried: retrying until green hides the
  * flakiness an eval exists to expose. The judge only runs when every rule
  * passed, so you never pay to grade a case that already failed.
+ * A call still running one timeout after its abort is reported as stuck and runCase
+ * returns; it is runSuite that keeps the slot busy until that call stops.
  * @param {Scenario} scenario
  * @param {Omit<RunOptions, 'concurrency' | 'onResult'>} opts
  * @returns {Promise<CaseResult>}
  */
-export async function runCase(
+export async function runCase(scenario, opts = /** @type {any} */ ({})) {
+  return (await evaluateCase(scenario, opts)).result;
+}
+
+/**
+ * runCase, plus `stuck`: the `settled` promise of a call that ignored the abort
+ * and was still running when the case ended, so runSuite can hold its slot.
+ * @param {Scenario} scenario
+ * @param {Omit<RunOptions, 'concurrency' | 'onResult'>} opts
+ * @returns {Promise<{ result: CaseResult, stuck?: Promise<void> }>}
+ */
+async function evaluateCase(
   scenario,
   {
     agent,
@@ -321,14 +342,17 @@ export async function runCase(
   assertCaseOptions('runCase', { agent, retries, timeoutMs, retryDelayMs, retryOnTimeout });
   const started = performance.now();
   const base = { id: scenario.id, category: scenario.category, critical: scenario.critical === true };
-  const done = (fields) => ({ ...base, ...fields, durationMs: Math.round(performance.now() - started) });
+  const done = (fields, stuck = undefined) => ({
+    result: { ...base, ...fields, durationMs: Math.round(performance.now() - started) },
+    ...(stuck && { stuck }),
+  });
 
   const { value, error, attempts } = await withRetries(
     (signal) => agent({ message: scenario.message, context: scenario.context ?? {}, signal }),
     { retries, timeoutMs, retryDelayMs, retryOnTimeout, label: 'agent' },
   );
   const failed = { attempts, output: null, checks: [], verdict: null, status: 'error' };
-  if (error) return done({ ...failed, error: error.message });
+  if (error) return done({ ...failed, error: error.message }, stuckCall(error));
 
   let output;
   let checks;
@@ -342,13 +366,15 @@ export async function runCase(
   }
 
   const rulesPass = checks.every((c) => c.pass);
-  const finish = (verdict, status, judgeUsage = undefined) => done({
+  const finish = (verdict, status, judgeUsage = undefined, stuck = undefined) => done({
     attempts, output, checks, verdict, status, ...usageField(agentUsage, judgeUsage),
-  });
+  }, stuck);
   if (!rulesPass || !scenario.rubric) return finish(null, caseStatus(rulesPass, null));
   if (!judge) return finish({ ...NOT_GRADED }, 'pass');
-  const { verdict, usage } = await judgeCase(judge, scenario, output, { retries, timeoutMs, retryDelayMs, retryOnTimeout });
-  return finish(verdict, caseStatus(rulesPass, verdict), usage);
+  const { verdict, usage, stuck } = await judgeCase(
+    judge, scenario, output, { retries, timeoutMs, retryDelayMs, retryOnTimeout },
+  );
+  return finish(verdict, caseStatus(rulesPass, verdict), usage, stuck);
 }
 
 /**
@@ -377,7 +403,40 @@ export function combineTrials(runs) {
 }
 
 /**
+ * How long, in timeouts, runSuite holds the slot of a stuck call before it stops
+ * the run. The timeout fires at `timeoutMs`; the call is reported as stuck at
+ * 2 × `timeoutMs` (one timeout of grace) and its slot is held until 3 × `timeoutMs`,
+ * that is 2 × `timeoutMs` after the timeout fired.
+ */
+const STUCK_HOLD_TIMEOUTS = 2;
+
+/** The result of a case none of whose trials ran because the run stopped. */
+function notRunResult(scenario, note) {
+  return {
+    id: scenario.id,
+    category: scenario.category,
+    critical: scenario.critical === true,
+    status: /** @type {const} */ ('error'),
+    attempts: 0,
+    durationMs: 0,
+    output: null,
+    checks: [],
+    verdict: null,
+    error: note,
+    trials: { run: 0, passed: 0 },
+    flaky: false,
+    stopped: true,
+  };
+}
+
+/**
  * Run a scenario bank with bounded concurrency, each case `trials` times in a row.
+ * At most `concurrency` agent or judge calls are in flight at once, and the
+ * trials of one case never overlap: a call that ignores the abort keeps its slot
+ * busy until it stops. One still running 2 × `timeoutMs` after its timeout fired
+ * stops the run: every case and trial not yet started is recorded as an `error`
+ * with `stopped: true`, and summarize fails the gate. The stuck call may still be
+ * running when this returns; nothing else starts next to it.
  * @param {Scenario[]} scenarios
  * @param {RunOptions} opts
  * @returns {Promise<CaseResult[]>}
@@ -389,10 +448,26 @@ export async function runSuite(
   assertCaseOptions('runSuite', opts);
   if (!Number.isInteger(trials) || trials < 1) throw new RangeError('trials must be a positive integer');
   if (!Number.isInteger(concurrency) || concurrency < 1) throw new RangeError('concurrency must be a positive integer');
+  const timeoutMs = opts.timeoutMs ?? RUN_DEFAULTS.timeoutMs;
+  const hold = STUCK_HOLD_TIMEOUTS * timeoutMs - timeoutMs;
+  const note = `not run, agent stuck: a call was still running ${STUCK_HOLD_TIMEOUTS * timeoutMs} ms `
+    + 'after it timed out, so the run stopped';
+  let stopped = false;
   return mapLimit(scenarios, concurrency, async (scenario) => {
     const runs = [];
-    for (let i = 0; i < trials; i += 1) runs.push(await runCase(scenario, opts));
-    const result = combineTrials(runs);
+    while (runs.length < trials && !stopped) {
+      const { result, stuck } = await evaluateCase(scenario, opts);
+      runs.push(result);
+      // The slot stays busy until the stuck call stops, or the run stops.
+      if (stuck && !(await settlesWithin(stuck, hold))) stopped = true;
+    }
+    let result;
+    if (!runs.length) result = notRunResult(scenario, note);
+    else if (runs.length < trials) {
+      const combined = combineTrials(runs);
+      const left = `${trials - runs.length} of ${trials} trials ${note}`;
+      result = { ...combined, status: 'error', error: combined.error ? `${combined.error}; ${left}` : left, stopped: true };
+    } else result = combineTrials(runs);
     onResult?.(result);
     return result;
   });

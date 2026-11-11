@@ -45,15 +45,21 @@ HTTP failures, add `retryAfterMs` if the server sent `Retry-After`, and set
 timeout aborts the signal, but it cannot stop code that ignores the signal, so a
 retry started at once would run next to the call it replaces: with a 50 ms
 timeout, two retries and a 120 ms agent, three calls for one case were in flight
-together, each billed. The same happened between cases: with `--concurrency 1`
-and four hung cases, four calls were in flight. So a timed-out call is always
-waited for, up to one more `--timeout`, before the case retries, ends or hands
-its slot to the next trial or case; a call still running after that is reported
-as stuck and not retried, and only then can calls overlap. A timeout ends the
-case as `error` by default; with `--retry-on-timeout` (`retryOnTimeout`) it is
-retried once the call has settled. A hung case therefore takes up to twice
-`--timeout`. Raise `--timeout` (default 10 s) for a real tool loop
-or an LLM judge.
+together, each billed. The same happened between cases: with `--concurrency 1`,
+`--trials 3` and four hung cases, twelve calls were in flight. So a timed-out
+call is always waited for, up to one more `--timeout`, before the case retries or
+ends; a call still running after that is reported as stuck and not retried. Its
+slot stays busy until it stops, so neither the next trial nor the next case
+starts next to it: calls in flight never exceed `--concurrency`, and the trials
+of one case never overlap. A call that never stops would then hang the run, so
+one still running two timeouts after it timed out (three timeouts after it
+started) stops the run: every case and trial not yet started is recorded as an
+`error` (`not run, agent stuck`, `stopped: true` in the report), the summary
+warns, the gate fails (exit 1, as for any failed gate) and the CLI exits without
+waiting for the stuck call. A timeout ends the case as `error` by default; with
+`--retry-on-timeout` (`retryOnTimeout`) it is retried once the call has settled.
+A slot can therefore be busy for up to three times `--timeout` on one hung call.
+Raise `--timeout` (default 10 s) for a real tool loop or an LLM judge.
 A retry reruns the whole case from the agent call on, every tool call in it
 included, and so does each of `--trials`. Tools with side effects (a refund, an
 email, a ticket) must be idempotent or mocks in the eval.
@@ -169,8 +175,9 @@ check keeps the code honest to it.
   do not commit it or upload it as a public CI artifact. CI here uploads only
   the report of the invented sticker shop.
 - **A timeout aborts the signal, it cannot stop your code.** An agent that
-  ignores `signal` may keep running after the harness has moved on to the next
-  case; it is never retried while it runs.
+  ignores `signal` keeps its slot until it stops and is never retried while it
+  runs. One that runs on for two timeouts after its timeout stops the whole run,
+  and may still be running (and billing) when the run ends.
 
 ## Roadmap
 

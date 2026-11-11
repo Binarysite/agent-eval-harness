@@ -103,7 +103,8 @@ flowchart LR
 ```
 
 Agent and judge calls get a timeout and are retried only on network errors, 429 and 5xx;
-calls never overlap unless an agent ignores the abort for longer than one more timeout. Each report records the judge and agent models, the
+calls in flight never exceed `--concurrency`, and an agent that ignores the abort keeps its slot until
+it stops; one still running two timeouts after it timed out stops the run, and the gate fails. Each report records the judge and agent models, the
 SHA-256 of the scenario file and the commit, so `compare` can warn when two runs were not
 set up the same way. Exit code 2 means a usage or setup error, never a verdict.
 

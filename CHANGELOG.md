@@ -6,6 +6,23 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- A call that ignores the abort keeps its concurrency slot until it stops. One still running
+  two timeouts after it timed out stops the run: the cases and trials not yet started are
+  `error` (`not run, agent stuck`, `stopped: true` in the report), the summary warns and the
+  gate fails (exit 1). A slot can be busy for up to three times `--timeout` on one hung call.
+
+### Fixed
+
+- The 0.4.1 concurrency fix was incomplete, and its entry below overclaimed. A call still
+  running one timeout after its abort was reported as stuck and its slot handed to the next
+  trial or case: `--concurrency 1`, `--trials 3` and 4 cases with an agent that ignores the
+  abort had 12 calls in flight, trials of one case overlapping, and an agent that never
+  stopped kept them all running. Calls in flight now never exceed `--concurrency`, trials of
+  one case never overlap, and such a run ends after about three timeouts, failing the gate.
+  The CLI exits even when the stuck call holds the process open.
+
 ## [0.4.1] - 2026-11-11
 
 ### Changed
@@ -25,7 +42,8 @@ Behaviour a CI job can notice when it upgrades; each is detailed under Fixed.
   it: with an agent ignoring the abort, `--trials 3` had 3 calls in flight for one case and
   `--concurrency 1` with 4 cases had 4. A timed-out call is now always waited for, up to one
   more timeout; one still running after that is reported as stuck. A hung case can now take
-  up to twice `--timeout`.
+  up to twice `--timeout`. (Corrected in 0.4.2: this held only for calls that stopped within
+  that extra timeout; a stuck call still gave up its slot. See 0.4.2.)
 - A blank numeric flag read as 0: `Number('')` and `Number(' ')` are 0, so
   `--min-pass-rate "$UNSET"` silently gated at 0. Numeric flags now reject a blank value,
   and the action treats a whitespace-only `min-pass-rate` as unset.
