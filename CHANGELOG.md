@@ -32,6 +32,10 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- A tool call may carry `result`, what the tool returned. The judge sees it (cut to 1000
+  characters) and is told that facts in the reply must match it; the rules ignore it. Both
+  example agents report their results. The calibration found the gap: a reply that misquoted
+  a lookup passed both DeepSeek judges 5 of 5 times when they saw only the call.
 - Published runs on the real DeepSeek API: a calibration of `deepseek-chat` and
   `deepseek-reasoner` on the 48 labelled replies, 5 trials each (`reports/calibration/`), and
   the example LLM agent on `deepseek-chat` over the 24 scenarios, 5 trials

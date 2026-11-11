@@ -37,7 +37,11 @@ test('runs the tool loop and reports every tool call', async (t) => {
 
   assert.deepEqual(out, {
     reply: 'Order #10482 has shipped.',
-    toolCalls: [{ name: 'lookup_order', args: { orderId: '10482' } }],
+    toolCalls: [{
+      name: 'lookup_order',
+      args: { orderId: '10482' },
+      result: { status: 'shipped', detail: 'tracking number TRK-0001, arriving Thursday' },
+    }],
   });
   assert.match(bodies[0].system, /Signed in as customer cus_A/);
   assert.ok(!bodies[0].tools.some((tool) => tool.name === 'draft_seller_message'));

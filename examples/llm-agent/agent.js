@@ -154,8 +154,9 @@ export default async function llmAgent({ message, context, signal }) {
     messages.push({
       role: 'user',
       content: uses.map((u) => {
-        toolCalls.push({ name: u.name, args: u.input });
-        return { type: 'tool_result', tool_use_id: u.id, content: JSON.stringify(runTool(u.name, u.input, context)) };
+        const result = runTool(u.name, u.input, context);
+        toolCalls.push({ name: u.name, args: u.input, result });
+        return { type: 'tool_result', tool_use_id: u.id, content: JSON.stringify(result) };
       }),
     });
   }

@@ -12,6 +12,12 @@ export default async function agent({ message, context, signal }) {
 }
 ```
 
+Add `result` to a tool call to show the judge what the tool returned, so it can check the
+reply's facts against it (the rules ignore it):
+`{ name: 'lookup_order', args: { orderId }, result: { status: 'shipped' } }`. Both example
+agents do. A result is shown cut to 1000 characters, and like the reply it is kept in the
+JSON report, so treat it as data the report holds.
+
 If your model reports token counts, also return `usage: { inputTokens, outputTokens }`. The report keeps
 them per case and the summary adds them up, next to the judge's own tokens. There is no price table.
 
