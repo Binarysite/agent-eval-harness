@@ -29,6 +29,6 @@ expected outcome, the judge agreed on **23 of 24**. The one disagreement:
 
 ## Not run
 
-An Anthropic judge run (planned with `claude-haiku-5-5`) was not done: no Anthropic API key
-was available in the approved key stores. One scenario bank, one agent, one judge model and
-one trial: a single sample, not a calibration.
+An Anthropic judge run has not been published yet. One scenario bank, one agent, one judge
+model and one trial: a single sample, not a calibration. The calibration against labelled
+replies came later: [2026-11-11](../calibration/2026-11-11-deepseek.md).

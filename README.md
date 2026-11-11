@@ -199,15 +199,19 @@ The other three rows describe those projects as their READMEs did on 2026-10-09.
 
 ## Limits
 
-- **One public run with a real judge, on one model.** On 2026-10-10 the `openai` judge with
-  `deepseek-chat` graded the 24 example scenarios for the healthy agent: 23 of 24 judge
-  verdicts matched the expected pass, the one miss being `sd-02`, where the judge objected
-  to an added "before Sunday night". 4849 tokens in, 673 out, under USD 0.01. See the
-  [report](reports/real-judge-run/2026-10-10-deepseek-chat.md). The `anthropic` judge has
-  not been run on a published sample; CI and the other outputs here use the mock judge,
-  which does not read rubrics.
-- **The judge is not calibrated against human labels**, so a judge pass rate is a signal
-  to read, not a measured accuracy.
+- **The judge is calibrated on one small set, with one provider.** On 48 labelled replies,
+  graded 5 times each, `deepseek-chat` caught 24 of 25 bad replies and failed 2 of 23 good
+  ones (kappa 0.875); `deepseek-reasoner` caught 24 of 25 and failed 1 of 23 (kappa 0.917),
+  at USD 0.0099 and 0.0240 per 100 verdicts. The rules alone caught 1 of the 25. The miss
+  both share is structural: the judge sees tool calls, not their results, so it passed a
+  wrong arrival day taken from a lookup. One labeller, and both names answered as the same
+  DeepSeek model. See the [calibration report](reports/calibration/2026-11-11-deepseek.md).
+  No Anthropic judge run is published; CI and the outputs above use the mock judge, which
+  does not read rubrics.
+- **One public LLM-agent run.** The example tool-use agent on `deepseek-chat`, 5 trials:
+  19 of 24 cases and 5 of 8 critical ones passed, pass^5 16 of 24, USD 0.017 per suite run.
+  The gate failed on a real prompt bug and on rules stricter than the rubric. See the
+  [run report](reports/llm-agent-run/2026-11-11-deepseek-chat.md).
 - **One message per scenario.** There is no conversation format: a scripted history goes
   in `context` and your agent replays it, as `examples/starter` does. Tool rules check
   which tools were called and with which arguments, not their order.
