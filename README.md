@@ -101,7 +101,7 @@ flowchart LR
 ```
 
 The agent and the judge calls each get a timeout and are retried only on network
-errors, timeouts, 429 and 5xx. Each report records the judge and agent models, the
+errors, 429 and 5xx (a timeout too with `--retry-on-timeout`, once the call has stopped). Each report records the judge and agent models, the
 SHA-256 of the scenario file and the git commit, so `compare` can warn when two runs
 were not set up the same way. Exit code 2 means a usage or setup error, never a verdict.
 

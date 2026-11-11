@@ -62,6 +62,7 @@ import { checkExpectations } from './expectations.js';
  * @property {number} [retries]      retries per call on infrastructure failures (default 1)
  * @property {number} [timeoutMs]    per call timeout for agent and judge (default 10000)
  * @property {number} [retryDelayMs] base of the exponential backoff between retries (default 500)
+ * @property {boolean} [retryOnTimeout] also retry a call that timed out, once it has stopped (default false)
  * @property {string} [handoffTool]  tool name the `handoff` rule looks for
  * @property {(r: CaseResult) => void} [onResult]
  */
@@ -69,10 +70,11 @@ import { checkExpectations } from './expectations.js';
 /**
  * Defaults shared by runCase, runSuite and the CLI, so the library and the
  * command line cannot drift apart.
- * @type {Readonly<{ concurrency: number, trials: number, retries: number, timeoutMs: number, retryDelayMs: number }>}
+ * @type {Readonly<{ concurrency: number, trials: number, retries: number, timeoutMs: number, retryDelayMs: number,
+ *   retryOnTimeout: boolean }>}
  */
 export const RUN_DEFAULTS = Object.freeze({
-  concurrency: 4, trials: 1, retries: 1, timeoutMs: 10_000, retryDelayMs: 500,
+  concurrency: 4, trials: 1, retries: 1, timeoutMs: 10_000, retryDelayMs: 500, retryOnTimeout: false,
 });
 
 // setTimeout fires at once for anything longer than this.
@@ -82,7 +84,7 @@ const MAX_TIMEOUT_MS = 2_147_483_647;
  * Reject options that would make the run misbehave instead of fail: a NaN
  * concurrency starts no worker, a NaN retry count retries forever.
  * @param {string} fn
- * @param {{ agent?: unknown, retries?: number, timeoutMs?: number, retryDelayMs?: number }} opts
+ * @param {{ agent?: unknown, retries?: number, timeoutMs?: number, retryDelayMs?: number, retryOnTimeout?: boolean }} opts
  */
 function assertCaseOptions(
   fn,
@@ -91,6 +93,7 @@ function assertCaseOptions(
     retries = RUN_DEFAULTS.retries,
     timeoutMs = RUN_DEFAULTS.timeoutMs,
     retryDelayMs = RUN_DEFAULTS.retryDelayMs,
+    retryOnTimeout = RUN_DEFAULTS.retryOnTimeout,
   },
 ) {
   if (typeof agent !== 'function') throw new TypeError(`${fn} needs an agent function`);
@@ -99,20 +102,27 @@ function assertCaseOptions(
     throw new RangeError(`timeoutMs must be a number above 0 and at most ${MAX_TIMEOUT_MS}`);
   }
   if (!(Number.isFinite(retryDelayMs) && retryDelayMs >= 0)) throw new RangeError('retryDelayMs must be a number >= 0');
+  if (typeof retryOnTimeout !== 'boolean') throw new TypeError('retryOnTimeout must be boolean');
 }
 
-/** Run `fn` with an AbortSignal and reject if it takes longer than `ms`. */
+/**
+ * Run `fn` with an AbortSignal and reject if it takes longer than `ms`. The
+ * rejection carries `settled`, a promise that resolves once the call itself has
+ * ended: an aborted signal asks the call to stop, it cannot make it stop.
+ */
 export async function withTimeout(fn, ms, label = 'call') {
   const controller = new AbortController();
   let timer;
+  const call = Promise.resolve().then(() => fn(controller.signal));
+  const settled = call.then(() => undefined, () => undefined);
   const timeout = new Promise((_, reject) => {
     timer = setTimeout(() => {
       controller.abort();
-      reject(Object.assign(new Error(`${label} timed out after ${ms} ms`), { name: 'TimeoutError' }));
+      reject(Object.assign(new Error(`${label} timed out after ${ms} ms`), { name: 'TimeoutError', settled }));
     }, ms);
   });
   try {
-    return await Promise.race([fn(controller.signal), timeout]);
+    return await Promise.race([call, timeout]);
   } finally {
     clearTimeout(timer);
   }
@@ -219,8 +229,24 @@ export function retryDelay(err, attempt, baseMs = 500) {
   return Math.random() * Math.min(MAX_BACKOFF_MS, baseMs * 2 ** (attempt - 1));
 }
 
-/** Call `fn` with a timeout, retrying transient failures up to `retries` times. */
-async function withRetries(fn, { retries, timeoutMs, retryDelayMs, label }) {
+/** Resolves true when `promise` settles within `ms`, false otherwise. */
+async function settlesWithin(promise, ms) {
+  const controller = new AbortController();
+  const late = sleep(ms, false, { signal: controller.signal }).catch(() => false);
+  try {
+    return await Promise.race([promise.then(() => true), late]);
+  } finally {
+    controller.abort();
+  }
+}
+
+/**
+ * Call `fn` with a timeout, retrying transient failures up to `retries` times.
+ * Calls never overlap: a call that timed out is retried only with
+ * `retryOnTimeout`, and only after it has stopped, waiting at most another
+ * `timeoutMs` for that.
+ */
+async function withRetries(fn, { retries, timeoutMs, retryDelayMs, retryOnTimeout, label }) {
   let attempts = 0;
   for (;;) {
     attempts += 1;
@@ -228,6 +254,13 @@ async function withRetries(fn, { retries, timeoutMs, retryDelayMs, label }) {
       return { value: await withTimeout(fn, timeoutMs, label), attempts };
     } catch (error) {
       if (attempts > retries || !isTransient(error)) return { error, attempts };
+      if (error.settled) {
+        if (!retryOnTimeout) return { error, attempts };
+        if (!(await settlesWithin(error.settled, timeoutMs))) {
+          const stuck = new Error(`${error.message} and did not stop within ${timeoutMs} ms of the abort; not retried`);
+          return { error: stuck, attempts };
+        }
+      }
       await sleep(retryDelay(error, attempts, retryDelayMs));
     }
   }
@@ -280,7 +313,8 @@ function caseStatus(rulesPass, verdict) {
 
 /**
  * Evaluate one scenario. Only infrastructure failures are retried (network,
- * abort, timeout, 429, 5xx), with the same policy for agent and judge. A wrong answer
+ * abort, 429, 5xx, and a timeout with `retryOnTimeout`), with the same policy
+ * for agent and judge. A wrong answer
  * or a "no" from the judge is never retried: retrying until green hides the
  * flakiness an eval exists to expose. The judge only runs when every rule
  * passed, so you never pay to grade a case that already failed.
@@ -296,17 +330,18 @@ export async function runCase(
     retries = RUN_DEFAULTS.retries,
     timeoutMs = RUN_DEFAULTS.timeoutMs,
     retryDelayMs = RUN_DEFAULTS.retryDelayMs,
+    retryOnTimeout = RUN_DEFAULTS.retryOnTimeout,
     handoffTool,
   } = /** @type {any} */ ({}),
 ) {
-  assertCaseOptions('runCase', { agent, retries, timeoutMs, retryDelayMs });
+  assertCaseOptions('runCase', { agent, retries, timeoutMs, retryDelayMs, retryOnTimeout });
   const started = performance.now();
   const base = { id: scenario.id, category: scenario.category, critical: scenario.critical === true };
   const done = (fields) => ({ ...base, ...fields, durationMs: Math.round(performance.now() - started) });
 
   const { value, error, attempts } = await withRetries(
     (signal) => agent({ message: scenario.message, context: scenario.context ?? {}, signal }),
-    { retries, timeoutMs, retryDelayMs, label: 'agent' },
+    { retries, timeoutMs, retryDelayMs, retryOnTimeout, label: 'agent' },
   );
   const failed = { attempts, output: null, checks: [], verdict: null, status: 'error' };
   if (error) return done({ ...failed, error: error.message });
@@ -328,7 +363,7 @@ export async function runCase(
   });
   if (!rulesPass || !scenario.rubric) return finish(null, caseStatus(rulesPass, null));
   if (!judge) return finish({ ...NOT_GRADED }, 'pass');
-  const { verdict, usage } = await judgeCase(judge, scenario, output, { retries, timeoutMs, retryDelayMs });
+  const { verdict, usage } = await judgeCase(judge, scenario, output, { retries, timeoutMs, retryDelayMs, retryOnTimeout });
   return finish(verdict, caseStatus(rulesPass, verdict), usage);
 }
 

@@ -30,6 +30,7 @@ const DEFAULTS = {
   retries: String(RUN_DEFAULTS.retries),
   trials: String(RUN_DEFAULTS.trials),
   timeout: String(RUN_DEFAULTS.timeoutMs),
+  retryOnTimeout: RUN_DEFAULTS.retryOnTimeout,
   minPassRate: String(MIN_PASS_RATE),
   handoffTool: HANDOFF_TOOL,
   out: 'reports/eval-report.json',
@@ -44,7 +45,9 @@ const HELP = `Usage: agent-eval -s <scenarios.json> -a <agent.js> [options]
   -c, --category <list>     only these categories, comma separated
       --critical            only critical cases
       --concurrency <n>     cases in flight at once (default ${DEFAULTS.concurrency})
-      --retries <n>         retries on network errors, timeouts, 429 and 5xx (default ${DEFAULTS.retries})
+      --retries <n>         retries on network errors, 429 and 5xx (default ${DEFAULTS.retries})
+      --retry-on-timeout    also retry a call that timed out, once it has stopped (it waits
+                            one more timeout for that; calls never overlap)
       --trials <k>          run each case k times; mixed results mark it flaky and a
                             critical case must pass k/k (default ${DEFAULTS.trials})
       --timeout <ms>        per call timeout for agent and judge (default ${DEFAULTS.timeout})
@@ -129,6 +132,7 @@ async function main() {
       retries: { type: 'string', default: DEFAULTS.retries },
       trials: { type: 'string', default: DEFAULTS.trials },
       timeout: { type: 'string', default: DEFAULTS.timeout },
+      'retry-on-timeout': { type: 'boolean', default: DEFAULTS.retryOnTimeout },
       'min-pass-rate': { type: 'string', default: DEFAULTS.minPassRate },
       'handoff-tool': { type: 'string', default: DEFAULTS.handoffTool },
       out: { type: 'string', short: 'o', default: DEFAULTS.out },
@@ -153,6 +157,7 @@ async function main() {
     retries: toNumber('retries', args.retries, { integer: true }),
     trials: toNumber('trials', args.trials, { min: 1, integer: true }),
     timeoutMs: toNumber('timeout', args.timeout, { min: 1, max: 2_147_483_647 }),
+    retryOnTimeout: args['retry-on-timeout'],
     handoffTool: args['handoff-tool'],
   };
   const minPassRate = toNumber('min-pass-rate', args['min-pass-rate'], { max: 1 });
