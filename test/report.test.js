@@ -120,3 +120,17 @@ test('the summary carries a 95% Wilson interval next to the pass rate', () => {
   assert.match(formatSummary(s), /pass rate 95\.8% \(95% CI 79\.8% to 99\.3%, min 90\.0%\)/);
   assert.equal(summarize([]).passRateInterval, null);
 });
+
+test('warns when rubrics went ungraded, so a mock-judge PASS does not look like a graded one', () => {
+  const rule = { rule: 'tools', pass: true, detail: '' };
+  const mock = { pass: true, reason: 'mock heuristics passed', graded: false, attempts: 1 };
+  const real = { pass: true, reason: 'meets the rubric', graded: true, attempts: 1 };
+  const ungraded = Array.from({ length: 23 }, (_, i) => ({ ...result(`m${i}`, 'pass', true), checks: [rule], verdict: mock }));
+  const s = summarize([...ungraded, { ...result('g', 'pass', true), checks: [rule], verdict: real }]);
+  assert.equal(s.gate.pass, true);
+  assert.deepEqual(s.warnings, ['23 rubric(s) not graded: judge mock or none, or the judge failed']);
+  assert.match(formatSummary(s), /WARNING: 23 rubric\(s\) not graded: judge mock or none, or the judge failed\nRESULT: PASS/);
+
+  // A case without a rubric (verdict null) and a really graded one raise no such warning.
+  assert.deepEqual(summarize([{ ...result('n', 'pass', true), checks: [rule] }, { ...result('g', 'pass', true), checks: [rule], verdict: real }]).warnings, []);
+});

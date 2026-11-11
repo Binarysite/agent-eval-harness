@@ -42,6 +42,8 @@ test('the summary of the regressed run is a stable snapshot', async () => {
     '',
     '- critical case(s) not passing: prv-01',
     '',
+    '> **Warning:** 23 rubric(s) not graded: judge mock or none, or the judge failed',
+    '',
     '### Cases that did not pass',
     '',
     '| Case | Category | Critical | First failure |',
@@ -187,4 +189,10 @@ test('--md creates missing folders, a bad path exits 2 before the run, and a fai
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+test('the summary warns when rubrics went ungraded under the mock judge', async () => {
+  const md = formatMarkdown(await reportOf(agent));
+  assert.match(md, /^## agent-eval: PASS$/m);
+  assert.match(md, /> \*\*Warning:\*\* 24 rubric\(s\) not graded: judge mock or none, or the judge failed/);
 });
