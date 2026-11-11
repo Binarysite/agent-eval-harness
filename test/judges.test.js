@@ -244,3 +244,17 @@ test('the API key never reaches the report', async (t) => {
   assert.deepEqual(results.map((r) => r.status), ['pass', 'error']);
   assert.ok(!JSON.stringify(buildReport(results, summarize(results))).includes(KEY));
 });
+
+test('judges record the model the API says answered, which an alias can hide', async (t) => {
+  mockFetch(
+    t,
+    anthropicText('{"pass": true, "reason": "ok"}', { model: 'claude-x' }),
+    { body: { model: 'deepseek-flash', choices: [{ message: { content: '{"pass": true}' } }] } },
+    openAIText('{"pass": true}'),
+  );
+  const anthropic = await createAnthropicJudge({ apiKey: KEY })({ scenario, output: output('x') });
+  assert.equal(anthropic.servedModel, 'claude-x');
+  const judge = createOpenAICompatibleJudge({ apiKey: KEY, model: 'deepseek-chat' });
+  assert.equal((await judge({ scenario, output: output('x') })).servedModel, 'deepseek-flash');
+  assert.equal('servedModel' in (await judge({ scenario, output: output('x') })), false);
+});
