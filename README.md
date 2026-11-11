@@ -32,40 +32,39 @@ RESULT: FAIL
   - critical case(s) not passing: prv-01
 ```
 
-Real output, trimmed (the header, the 23 `PASS` lines, the per-category table and the
-report path are cut). Exit code 1. The agent here is a sticker-shop stand-in with its
-order ownership check switched off, the kind of guard a refactor drops by accident.
-95.8% clears the 90% bar, so a pass rate alone would have shipped it. `npm run eval`
-runs the healthy agent on the same 24 scenarios and exits 0. Both agents are rule-based
-and these runs use the offline mock judge, so no model is called: the point is the gate.
+Real output, trimmed; exit code 1. The agent is a rule-based sticker-shop stand-in with its
+order ownership check switched off, and 95.8% clears the 90% bar, so a pass rate alone would
+have shipped it.
 
-Extracted from the eval harness of a customer-service agent in a live pilot on demo
-sites, with no paying customer yet (294 scenarios, 65 critical, all private); the sticker
-shop here is invented. Built with Claude Code; the design decisions and reviews are mine.
+Extracted from the eval harness of a chat agent that is in a live pilot on demo sites for
+prospective clinics; no paying clinic yet. That bank is private; the sticker shop is invented.
 
 ## Try it on your own agent
 
-Copy the starter (three scenarios and an agent stub) and run it from the v0.3.1 tag.
-The package is not on the npm registry, so `npx` installs it from GitHub:
+Copy the starter (three scenarios and an agent stub) and run it, all from the same tag:
 
 ```bash
 mkdir evals && cd evals
-curl -fsSLO https://raw.githubusercontent.com/Binarysite/agent-eval-harness/main/examples/starter/scenarios.json
-curl -fsSLO https://raw.githubusercontent.com/Binarysite/agent-eval-harness/main/examples/starter/agent.js
-npx -y github:Binarysite/agent-eval-harness#v0.3.1 -s scenarios.json -a agent.js
+curl -fsSLO https://raw.githubusercontent.com/Binarysite/agent-eval-harness/v0.4.0/examples/starter/scenarios.json
+curl -fsSLO https://raw.githubusercontent.com/Binarysite/agent-eval-harness/v0.4.0/examples/starter/agent.mjs
+npx -y github:Binarysite/agent-eval-harness#v0.4.0 -s scenarios.json -a agent.mjs
 ```
 
-It passes 3 of 3. Then replace the body of `agent.js` with a call to your agent. The
+It passes 3 of 3. Then replace the body of `agent.mjs` with a call to your agent. The
 contract is one function:
 
 ```js
 export default async function agent({ message, context, signal }) {
   const res = await runSupportAgent({ message, customerId: context.customerId, signal });
-  return { reply: res.text, toolCalls: res.toolUses.map((t) => ({ name: t.name, args: t.input })) };
+  return {
+    reply: res.text,
+    toolCalls: res.toolUses.map((t) => ({ name: t.name, args: t.input, result: t.output })),
+  };
 }
 ```
 
-A scenario is a message, an optional `context`, rules in `expect` and a plain-language
+`result` is optional; with it, the judge can check the reply's facts against what the tools
+returned. A scenario is a message, an optional `context`, rules in `expect` and a plain-language
 `rubric` for the judge:
 
 ```json
@@ -81,10 +80,12 @@ A scenario is a message, an optional `context`, rules in `expect` and a plain-la
 ```
 
 Rules: `tools`, `noTools`, `anyTool`, `handoff`, `toolArgs`, `includesAny`, `excludes`.
-A typo in a field or rule name fails validation instead of becoming "no check". The full
+A typo in a field or rule name fails validation instead of becoming "no check", and
+[schema/scenarios.schema.json](schema/scenarios.schema.json) flags it in the editor. The
 format is in [docs/SCENARIOS.md](docs/SCENARIOS.md); the agent contract, the judges
-(`mock`, `anthropic`, `openai`, `none`), the library API and the example Claude agent are
-in [docs/AGENTS-AND-JUDGES.md](docs/AGENTS-AND-JUDGES.md).
+(`mock`, `anthropic`, `openai`, `none`) and the library API in
+[docs/AGENTS-AND-JUDGES.md](docs/AGENTS-AND-JUDGES.md); how to measure a judge against
+labels in [docs/CALIBRATION.md](docs/CALIBRATION.md).
 
 ## How it works
 
@@ -100,10 +101,10 @@ flowchart LR
   O -.-> C["compare main vs branch<br/>exit 1 on a regression"]
 ```
 
-The agent and the judge calls each get a timeout and are retried only on network
-errors, 429 and 5xx (a timeout too with `--retry-on-timeout`, once the call has stopped). Each report records the judge and agent models, the
-SHA-256 of the scenario file and the git commit, so `compare` can warn when two runs
-were not set up the same way. Exit code 2 means a usage or setup error, never a verdict.
+Agent and judge calls get a timeout and are retried only on network errors, 429 and 5xx;
+calls for one case never overlap. Each report records the judge and agent models, the
+SHA-256 of the scenario file and the commit, so `compare` can warn when two runs were not
+set up the same way. Exit code 2 means a usage or setup error, never a verdict.
 
 ## Design decisions
 
@@ -116,8 +117,9 @@ it is fixed.
 **Rules first, the judge only after every rule passed.** Rules are free, deterministic
 and explain themselves; the judge covers what they cannot, and you never pay to grade a
 reply that already failed. *Cost:* substring rules are literal (`excludes` catches
-"Riverton", not "a town by the river"), so critical cases also need a rubric, and a
-failed case gets no judge explanation.
+"Riverton", not "a town by the river"), so critical cases also need a rubric. On the
+labelled set the rules alone catch 1 of 25 bad replies and rules plus a calibrated judge
+25 of 25.
 
 **Retries for infrastructure, never for answers.** A wrong reply or a "no" from the judge
 is reported at once, because retrying until green hides the flakiness an eval exists to
@@ -152,9 +154,10 @@ Pass rate 100.0% -> 95.8%  regressions 1
 Pass rate change is within noise: the 95% intervals overlap (86.2% to 100.0% and 79.8% to 99.3%).
 ```
 
-`compare` exits 1 when a case that passed before now fails, errors or is missing. It
-warns when the runs differ in judge or agent model, scenario file, filters or trials, and
-prints the two commits as an info line.
+`compare` exits 1 when a case that passed before now fails, errors or is missing. Here the
+pass-rate drop is within noise and the build still fails, because the case that moved is
+critical. It warns when the runs differ in judge or agent model, scenario file, filters or
+trials, and prints the two commits as an info line.
 
 ## In GitHub Actions
 
@@ -169,13 +172,13 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: Binarysite/agent-eval-harness@d4321354eb32a501e7b31cfb64a0f70e228e20f6 # v0.3.1
         with:
           scenarios: evals/scenarios.json
-          agent: evals/agent.js
+          agent: evals/agent.mjs
           judge: anthropic
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -216,12 +219,11 @@ The other three rows describe those projects as their READMEs did on 2026-10-09.
 - **One message per scenario.** There is no conversation format: a scripted history goes
   in `context` and your agent replays it, as `examples/starter` does. Tool rules check
   which tools were called and with which arguments, not their order.
-- **Small banks give coarse rates.** With 24 cases, one case is 4.2 points and the 95%
-  interval of 23 of 24 runs from 79.8% to 99.3%. The summary prints that interval and
-  `compare` says when a change is within it; read which cases moved, not only the
-  percentage. Overlapping intervals is a conservative test: it calls some real changes noise.
-- **Reports keep every reply in full.** Treat a report from a real agent as sensitive.
-- **Not on the npm registry.** Run it from a clone or with `npx github:Binarysite/agent-eval-harness#v0.3.1`.
+- **Small banks give coarse rates.** The 95% interval of 23 of 24 runs from 79.8% to
+  99.3%. The summary prints it and `compare` says when a change is within it; overlapping
+  intervals is a conservative test, so read which cases moved.
+- **Reports keep every reply and tool result in full.** Treat a report from a real agent
+  as sensitive.
 
 ## Works with
 
@@ -234,10 +236,12 @@ critical privacy case; four avoid words fixed it (24/24).
 ## Engineering
 
 CI runs on Node 22 and 24: lint, type checks (the public types in `index.d.ts` with
-`--strict`), `npm audit`, the tests with a coverage floor (95% of lines, 90% of branches
-and functions), both demos with their expected exit codes, and the action itself. A test
-fails if the two output blocks above stop matching a real run. Actions are pinned by
-commit SHA and kept current by Dependabot.
+`--strict`), `npm audit` of runtime dependencies (there are none), the tests with a
+coverage floor (95% of lines, 90% of branches and functions), both demos with their
+expected exit codes, and the action itself. Tests fail when the output blocks above stop
+matching a real run, when a pinned action or tag here drifts from the CI and from each
+other, when the JSON Schema drifts from the validator, and when the labelled set drifts
+from the agent. Actions are pinned by commit SHA and kept current by Dependabot.
 
 ## License
 
