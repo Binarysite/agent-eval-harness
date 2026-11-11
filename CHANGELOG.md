@@ -39,7 +39,9 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Published runs on the real DeepSeek API: a calibration of `deepseek-chat` and
   `deepseek-reasoner` on the 48 labelled replies, 5 trials each (`reports/calibration/`), and
   the example LLM agent on `deepseek-chat` over the 24 scenarios, 5 trials
-  (`reports/llm-agent-run/`). The README limits cite both.
+  (`reports/llm-agent-run/`), and the calibration re-run once the judge sees tool results
+  (`deepseek-reasoner`: 25 of 25 bad replies caught, 1 of 23 good ones failed, kappa 0.958).
+  The README limits cite them.
 - Judge calibration: `examples/sticker-shop/calibration.json` (48 labelled replies: the
   healthy agent's 24 and 24 bad ones, most of which get past the rules),
   `scripts/calibrate.mjs`, and `runCalibration` / `calibrationMetrics` in the library. It

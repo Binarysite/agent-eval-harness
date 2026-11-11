@@ -200,12 +200,13 @@ The other three rows describe those projects as their READMEs did on 2026-10-09.
 ## Limits
 
 - **The judge is calibrated on one small set, with one provider.** On 48 labelled replies,
-  graded 5 times each, `deepseek-chat` caught 24 of 25 bad replies and failed 2 of 23 good
-  ones (kappa 0.875); `deepseek-reasoner` caught 24 of 25 and failed 1 of 23 (kappa 0.917),
-  at USD 0.0099 and 0.0240 per 100 verdicts. The rules alone caught 1 of the 25. The miss
-  both shared was structural: the judge saw tool calls, not their results, so it passed a
-  wrong arrival day taken from a lookup. A tool call can now carry its `result` for the judge. One labeller, and both names answered as the same
-  DeepSeek model. See the [calibration report](reports/calibration/2026-11-11-deepseek.md).
+  graded 5 times each, `deepseek-reasoner` caught 25 of 25 bad replies and failed 1 of 23
+  good ones (kappa 0.958), `deepseek-chat` 24 of 25 and 1 of 23 (kappa 0.917), at USD 0.021
+  and 0.011 per 100 verdicts; the rules alone caught 1 of the 25. A first run found a blind
+  spot: the judge saw tool calls but not their results, and passed a misquoted lookup 5 of 5
+  times. Tool calls now carry results, and that reply fails 5 of 5. One labeller, wide
+  intervals, and both names answered as the same DeepSeek model. See the
+  [calibration report](reports/calibration/2026-11-11-deepseek.md).
   No Anthropic judge run is published; CI and the outputs above use the mock judge, which
   does not read rubrics.
 - **One public LLM-agent run.** The example tool-use agent on `deepseek-chat`, 5 trials:
