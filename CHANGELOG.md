@@ -25,6 +25,10 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- The starter agent is `examples/starter/agent.mjs`, so it runs as ES module code without a
+  `package.json`, and the README downloads it from the same tag it runs.
+- The README is shorter, and a test checks that its pinned actions match the CI and that
+  every tag it and the docs mention is the same.
 - `compare` prints a different commit as an info line (`commits: abc -> def`) instead of a
   warning, and returns it in `notes`: comparing two commits is what it is for.
 - Shared helpers moved to `src/util.js`, so `report`, `markdown` and `compare` no longer

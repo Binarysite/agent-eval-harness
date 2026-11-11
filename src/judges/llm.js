@@ -77,7 +77,7 @@ function lastVerdictObject(text) {
     try {
       return verdictFrom(text.slice(start, end + 1));
     } catch {
-      // not a verdict; try the object that starts before this one
+      continue;
     }
   }
   return null;
