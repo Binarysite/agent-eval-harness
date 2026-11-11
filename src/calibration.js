@@ -3,8 +3,9 @@ import { mapLimit, runCase } from './runner.js';
 
 /**
  * Judge calibration: how often a judge agrees with labels on replies whose
- * right verdict is known. A pass rate from an uncalibrated judge is a signal to
- * read; with these numbers it becomes a measurement with a known error rate.
+ * right verdict is known. A pass rate from a judge never measured against labels
+ * is a signal to read; with these numbers it comes with a measured error rate on
+ * that labelled set, which says nothing certain about another bank or model.
  *
  * The positive class is a bad reply (label `fail`), because catching those is
  * the judge's job: TPR is the share of bad replies the judge failed, FPR the

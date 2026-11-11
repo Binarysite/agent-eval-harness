@@ -125,13 +125,15 @@ check keeps the code honest to it.
   nonsense. Read the failing verdicts before trusting a number, pin the judge
   model, and treat a judge or rubric change as an eval change, not a free
   improvement.
-- **The judge is calibrated on one small labelled set.** `docs/CALIBRATION.md`
+- **The judge is measured on one small labelled set.** `docs/CALIBRATION.md`
   and `reports/calibration/` measure two DeepSeek judges against 48 labelled
-  replies (one labeller). With 25 bad and 23 good replies, every rate has a wide
-  interval, and a different bank or model needs its own calibration.
+  replies (one labeller). The best result, 25 of 25 bad replies caught by
+  `deepseek-reasoner`, came after a fix made in response to this same set, so
+  it is not independent evidence. With 25 bad and 23 good replies, every rate
+  has a wide interval, and a different bank or model needs its own measurement.
 - **The judge checks facts only against tool results the agent reports.** A
   reply that misquoted a lookup ("arrives Monday" when the lookup said Thursday)
-  passed both calibrated judges 5 of 5 times while the judge saw only tool
+  passed both measured judges 5 of 5 times while the judge saw only tool
   calls. A tool call may now carry its `result`, which the judge sees (cut to
   1000 characters) and the rules ignore; an agent that does not report results
   keeps the blind spot.
